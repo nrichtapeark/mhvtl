@@ -556,6 +556,8 @@ uint8_t valid_encryption_blk(struct scsi_cmd *cmd)
 					return correct_key;
 				}
 			}
+                } else if (lu_priv->DECRYPT_MODE == 1) {
+                        /* RAW read mode, it'll be fine */
 		} else {
 			sam_data_protect(E_UNABLE_TO_DECRYPT, sam_stat);
 			correct_key = FALSE;
