@@ -1243,6 +1243,10 @@ int write_tape_block(const uint8_t *buffer, uint32_t blk_size,
 		raw_pos.hdr.blk_encryption_info.key_length = encryptp->key_length;
 		for (i = 0; i < encryptp->key_length; ++i)
 			raw_pos.hdr.blk_encryption_info.key[i] = encryptp->key[i];
+
+		raw_pos.hdr.blk_encryption_info.mkad_length = encryptp->mkad_length;
+		for (i = 0; i < encryptp->mkad_length; ++i)
+			raw_pos.hdr.blk_encryption_info.mkad[i] = encryptp->mkad[i];
 	}
 
 	/* Now write out both the data and the header. */

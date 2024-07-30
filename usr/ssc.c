@@ -527,6 +527,8 @@ uint8_t check_restrictions(struct scsi_cmd *cmd)
 #define	UKAD		(encr->ukad)
 #define	AKAD		(encr->akad)
 #define	KEY		(encr->key)
+#define MKAD_LENGTH     (encr->mkad_length)
+#define	MKAD		(encr->mkad)
 uint8_t valid_encryption_blk(struct scsi_cmd *cmd)
 {
 	uint8_t correct_key;

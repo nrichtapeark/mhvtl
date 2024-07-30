@@ -983,7 +983,7 @@ static int resp_spin_page_20(struct scsi_cmd *cmd)
 		}
 		if (MKAD_LENGTH) {
 			buf[3] += 4 + MKAD_LENGTH;
-			buf[i++] = 0x01;
+			buf[i++] = 0x03;
 			buf[i++] = 0x00;
 			buf[i++] = 0x00;
 			buf[i++] = MKAD_LENGTH;
@@ -1035,6 +1035,16 @@ static int resp_spin_page_20(struct scsi_cmd *cmd)
 				for (count = 0; count < c_pos->blk_encryption_info.akad_length; ++count)
 					buf[i++] = c_pos->blk_encryption_info.akad[count];
 				ret += 4 + c_pos->blk_encryption_info.akad_length;
+			}
+			if (c_pos->blk_encryption_info.mkad_length) {
+				buf[3] += 4 + c_pos->blk_encryption_info.mkad_length;
+				buf[i++] = 0x03;
+				buf[i++] = 0x03;
+				buf[i++] = 0x00;
+				buf[i++] = c_pos->blk_encryption_info.mkad_length;
+				for (count = 0; count < c_pos->blk_encryption_info.mkad_length; ++count)
+					buf[i++] = c_pos->blk_encryption_info.mkad[count];
+				ret += 4 + c_pos->blk_encryption_info.mkad_length;
 			}
 			/* compare the keys */
 			if (correct_key) {
