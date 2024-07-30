@@ -470,7 +470,7 @@ static lzo_uint mhvtl_compressBound(lzo_uint src_sz)
  */
 static void setup_crypto(struct scsi_cmd *cmd, struct priv_lu_ssc *lu_priv)
 {
-	lu_priv->app_encr_info = lu_priv->ENCRYPT_MODE == 2 ? &app_encryption_state : NULL;
+	lu_priv->app_encr_info = lu_priv->ENCRYPT_MODE == 2 || lu_priv->ENCRYPT_MODE == 1 ? &app_encryption_state : NULL;
 
 	if (lu_priv->pm->valid_encryption_media)
 		lu_priv->pm->valid_encryption_media(cmd);
