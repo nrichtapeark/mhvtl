@@ -395,7 +395,7 @@ static int td4_kad_validation(int encrypt_mode, int ukad, int akad, int mkad)
 	int count = FALSE;
 	if (ukad > 32 || akad > 12 || mkad > 140)
 		count = TRUE;
-	if (!encrypt_mode && (ukad || akad || mkad))
+	if (!encrypt_mode && (ukad || akad))
 		count = TRUE;
 
 	return count;
