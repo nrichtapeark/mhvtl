@@ -241,7 +241,7 @@ static int encr_capabilities_9840(struct scsi_cmd *cmd)
 	return 44;
 }
 
-static int T9840_kad_validation(int encrypt_mode, int ukad, int akad)
+static int T9840_kad_validation(int encrypt_mode, int ukad, int akad, int mkad)
 {
 	if (ukad > 30 || akad > 0)
 		return TRUE;

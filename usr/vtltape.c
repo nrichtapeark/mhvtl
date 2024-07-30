@@ -68,6 +68,7 @@
 #include <pwd.h>
 #include <signal.h>
 #include <ctype.h>
+
 #include "mhvtl_list.h"
 #include "be_byteshift.h"
 #include "vtl_common.h"
@@ -94,6 +95,11 @@ struct encryption app_encryption_state;		/* Stores the encryption info the appli
 #define	UKAD		app_encryption_state.ukad
 #define	AKAD		app_encryption_state.akad
 #define	KEY		app_encryption_state.key
+
+#include <openssl/aes.h>
+#include <openssl/modes.h>
+#define	MKAD		app_encryption_state.mkad
+#define	MKAD_LENGTH	app_encryption_state.mkad_length
 
 #include <zlib.h>
 #include "minilzo.h"
@@ -975,6 +981,17 @@ static int resp_spin_page_20(struct scsi_cmd *cmd)
 
 			ret += 4 + AKAD_LENGTH;
 		}
+		if (MKAD_LENGTH) {
+			buf[3] += 4 + MKAD_LENGTH;
+			buf[i++] = 0x01;
+			buf[i++] = 0x00;
+			buf[i++] = 0x00;
+			buf[i++] = MKAD_LENGTH;
+			for (count = 0; count < MKAD_LENGTH; ++count)
+				buf[i++] = MKAD[count];
+
+			ret += 4 + MKAD_LENGTH;
+		}
 		break;
 
 	case ENCR_NEXT_BLK_ENCR_STATUS:
@@ -996,7 +1013,7 @@ static int resp_spin_page_20(struct scsi_cmd *cmd)
 			buf[12] = 0x3; /* not encrypted */
 		buf[13] = 0x01; /* Algorithm Index */
 		ret = 16;
-		if (c_pos->blk_flags & BLKHDR_FLG_ENCRYPTED) {
+                if (c_pos->blk_flags & BLKHDR_FLG_ENCRYPTED) {
 			correct_key = TRUE;
 			i = 16;
 			if (c_pos->blk_encryption_info.ukad_length) {
@@ -1147,6 +1164,7 @@ uint8_t resp_spout(struct scsi_cmd *cmd)
 	lu_ssc.DECRYPT_MODE = buf[7];
 	UKAD_LENGTH = 0;
 	AKAD_LENGTH = 0;
+        MKAD_LENGTH = 0;
 	KEY_LENGTH = get_unaligned_be16(&buf[18]);
 	for (count = 0; count < KEY_LENGTH; ++count) {
 		KEY[count] = buf[20 + count];
@@ -1170,10 +1188,16 @@ uint8_t resp_spout(struct scsi_cmd *cmd)
 			for (count = 0; count < AKAD_LENGTH; ++count) {
 				AKAD[count] = buf[24 + KEY_LENGTH + count];
 			}
+		} else if (buf[20 + KEY_LENGTH] == 0x03) {
+			MHVTL_DBG(2, "Metadata Key Associated Data (MKAD) provided");
+			MKAD_LENGTH = get_unaligned_be16(&buf[22 + KEY_LENGTH]);
+			for (count = 0; count < MKAD_LENGTH; ++count) {
+				MKAD[count] = buf[24 + KEY_LENGTH + count];
+			}
 		}
 	}
 
-	count = lu_priv->pm->kad_validation(lu_ssc.ENCRYPT_MODE, UKAD_LENGTH, AKAD_LENGTH);
+	count = lu_priv->pm->kad_validation(lu_ssc.ENCRYPT_MODE, UKAD_LENGTH, AKAD_LENGTH, MKAD_LENGTH);
 
 	/* For some reason, this command needs to be failed */
 	if (count) {
@@ -1182,6 +1206,7 @@ uint8_t resp_spout(struct scsi_cmd *cmd)
 		lu_ssc.DECRYPT_MODE = buf[7];
 		UKAD_LENGTH = 0;
 		AKAD_LENGTH = 0;
+                MKAD_LENGTH = 0;
 		KEY_LENGTH = 0;
 		sam_illegal_request(E_INVALID_FIELD_IN_CDB, NULL, sam_stat);
 		return SAM_STAT_CHECK_CONDITION;

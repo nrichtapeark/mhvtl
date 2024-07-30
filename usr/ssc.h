@@ -61,7 +61,7 @@ struct ssc_personality_template {
 	int (*encryption_capabilities)(struct scsi_cmd *cmd);
 
 	/* SPOUT -> Validation KAD info is correct */
-	int (*kad_validation)(int encrypt_mode, int akad, int ukad);
+	int (*kad_validation)(int encrypt_mode, int akad, int ukad, int mkad);
 
 	/* Update mode page for encryption capabilities */
 	uint8_t (*update_encryption_mode)(struct list_head *m, void *p, int mode);

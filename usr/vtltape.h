@@ -36,10 +36,12 @@
 #define BLKHDR_FLG_ENCRYPTED  0x02
 #define BLKHDR_FLG_LZO_COMPRESSED 0x04
 #define BLKHDR_FLG_CRC 0x08
+#define BLKHDR_FLG_LTO_ENCRYPTED  0x10
 
 #define TAPE_FMT_VERSION	3
 
 #define ENCR_KEY_MAX_LEN	32
+#define ENCR_META_MAX_LEN       140
 struct	encryption {
 	uint32_t	key_length;
 	uint32_t	ukad_length;
@@ -48,6 +50,8 @@ struct	encryption {
 	uint8_t		key[ENCR_KEY_MAX_LEN];
 	uint8_t		ukad[ENCR_KEY_MAX_LEN];
 	uint8_t		akad[ENCR_KEY_MAX_LEN];
+        uint32_t        mkad_length;
+        uint8_t         mkad[ENCR_META_MAX_LEN];
 };
 
 /*

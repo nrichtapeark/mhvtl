@@ -390,12 +390,12 @@ static void init_ult_inquiry(struct lu_phy_attr *lu)
 	update_vpd_ult_c1(lu, lu->lu_serial_no);
 }
 
-static int td4_kad_validation(int encrypt_mode, int ukad, int akad)
+static int td4_kad_validation(int encrypt_mode, int ukad, int akad, int mkad)
 {
 	int count = FALSE;
-	if (ukad > 32 || akad > 12)
+	if (ukad > 32 || akad > 12 || mkad > 40)
 		count = TRUE;
-	if (!encrypt_mode && (ukad || akad))
+	if (!encrypt_mode && (ukad || akad || mkad))
 		count = TRUE;
 
 	return count;

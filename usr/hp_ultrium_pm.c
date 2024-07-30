@@ -380,12 +380,12 @@ static void init_ult_inquiry(struct lu_phy_attr *lu)
 						"1960/03/10 10:00", "1");
 }
 
-static int hp_lto_kad_validation(int encrypt_mode, int ukad, int akad)
+static int hp_lto_kad_validation(int encrypt_mode, int ukad, int akad, int mkad)
 {
 	int count = FALSE;
-	if (ukad > 32 || akad > 12)
+	if (ukad > 32 || akad > 12 || mkad > 40)
 		count = TRUE;
-	if (!encrypt_mode && (ukad || akad))
+	if (!encrypt_mode && (ukad || akad || mkad))
 		count = TRUE;
 
 	return count;

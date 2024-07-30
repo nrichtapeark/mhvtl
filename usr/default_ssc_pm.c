@@ -318,7 +318,7 @@ static void init_default_inquiry(struct lu_phy_attr *lu)
 }
 
 /* Dummy routine. Always return false */
-static int default_kad_validation(int mode, int ukad, int akad)
+static int default_kad_validation(int mode, int ukad, int akad, int mkad)
 {
 	return FALSE;
 }

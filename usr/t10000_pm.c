@@ -222,7 +222,7 @@ static int encr_capabilities_t10k(struct scsi_cmd *cmd)
 	return 44;
 }
 
-static int t10k_kad_validation(int encrypt_mode, int ukad, int akad)
+static int t10k_kad_validation(int encrypt_mode, int ukad, int akad, int mkad)
 {
 	if (ukad > 30 || akad > 0)
 		return TRUE;

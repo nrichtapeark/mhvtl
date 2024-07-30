@@ -300,7 +300,7 @@ static void init_3592_inquiry(struct lu_phy_attr *lu)
 	update_vpd_c1(lu, "Security");
 }
 
-static int e06_kad_validation(int encrypt_mode, int ukad, int akad)
+static int e06_kad_validation(int encrypt_mode, int ukad, int akad, int mkad)
 {
 	int count = FALSE;
 	if (ukad > 0 || akad > 12)

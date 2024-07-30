@@ -242,7 +242,7 @@ static void init_ait_inquiry(struct lu_phy_attr *lu)
 }
 
 /* Dummy routine. Always return false */
-static int ait_kad_validation(int mode, int ukad, int akad)
+static int ait_kad_validation(int mode, int ukad, int akad, int mkad)
 {
 	return FALSE;
 }

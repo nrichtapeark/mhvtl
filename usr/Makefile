@@ -163,7 +163,7 @@ vtltape:	vtltape.o vtlcart.o vtllib.h vtltape.h mhvtl_scsi.h \
 		crc32c.o \
 		reed-solomon.o \
 		mhvtl_io.o \
-		-lz -L. -lvtlcart -lvtlscsi
+		-lz -lssl -L. -lvtlcart -lvtlscsi
 
 mhvtl-device-conf-generator: mhvtl-device-conf-generator.c
 
