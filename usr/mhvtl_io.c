@@ -37,6 +37,10 @@
 #include <zlib.h>
 #include "minilzo.h"
 
+#include <openssl/aes.h>
+#include <openssl/modes.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
 
 extern int verbose;
 extern int debug;
@@ -253,6 +257,192 @@ static int uncompress_zlib_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_st
 	return rc;
 }
 
+/*
+static char *hex_string(uint8_t *buffer, size_t len)
+{
+        size_t i = 0;
+        static char out[512 * 2 + 1];
+        char *output = out;
+        for (i = 0; i < len; i++) {
+                int inc = sprintf(output, "%02x", buffer[i]);
+                output += inc;
+        }
+
+        output[len] = 0;
+        return out;
+}
+*/
+
+static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
+{
+        uint8_t aad[64];
+        size_t aad_len;
+        uint8_t iv[12];
+        uint8_t *encr_data = NULL;
+        size_t encr_data_len;
+        uint8_t tag[16];
+        size_t i;
+        size_t offset = 0;
+        uint8_t *cbuf = NULL;
+	loff_t nread = 0;
+        uint8_t data_encr_key[32];
+        uint8_t mkad[40];
+
+        uint32_t disk_blk_size;
+        int rc, rv;
+
+        static const unsigned char default_iv[] = {0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6 };
+        AES_KEY aes_key;
+
+        EVP_CIPHER_CTX *ctx = NULL;
+        int outlen;
+
+        if (!c_pos)
+        {
+                MHVTL_ERR("No c_pos: %d", __LINE__);
+                sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+        struct encryption *blk_encryption_info = &c_pos->blk_encryption_info;
+        if (!blk_encryption_info)
+        {
+                MHVTL_ERR("No encryption data: %d", __LINE__);
+                sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+        for (i = 0; i < sizeof(mkad); i++)
+        {
+                mkad[i] = blk_encryption_info->mkad[i+4];
+        }
+
+        if (app_encryption_state.key_length <= 0)
+        {
+                MHVTL_ERR("No encryption key data: %d", __LINE__);
+                sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+
+        AES_set_decrypt_key(app_encryption_state.key, app_encryption_state.key_length * 8, &aes_key);
+        if (AES_unwrap_key(&aes_key, default_iv, data_encr_key, mkad, sizeof(mkad)) <= 0)
+        {
+		MHVTL_ERR("Key unwrap failed: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+	/* The tape block is compressed.
+	   Save field values we will need after the read which
+	   causes the tape block to advance.
+	*/
+	disk_blk_size = c_pos->disk_blk_size;
+
+	cbuf = (uint8_t *)malloc(disk_blk_size);
+	if (!cbuf)
+        {
+		MHVTL_ERR("Out of memory: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+	}
+
+	nread = read_tape_block(cbuf, disk_blk_size, sam_stat);
+	if (nread != disk_blk_size) {
+		MHVTL_ERR("read failed, %s", strerror(errno));
+		sam_medium_error(E_UNRECOVERED_READ, sam_stat);
+                rc = 0;
+                goto cleanup;
+	}
+
+        if (tgtsize < sizeof(aad))
+        {
+		MHVTL_ERR("Block corrupt or incomplete");
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+        if (cbuf[16] && cbuf[17] && cbuf[18] && cbuf[19])
+        {
+                /* Looks like an LTO4 */
+                aad_len = 16;
+        }
+        else
+        {
+                /* Looks like an LTO5+ */
+                aad_len = 64;
+        }
+
+        for (i = 0; i < aad_len; i++)
+        {
+                aad[i] = cbuf[offset + i];
+        }
+
+        offset += aad_len;
+        for (i = 0; i < sizeof(iv); i++)
+        {
+                iv[i] = cbuf[offset + i];
+        }
+
+        offset += sizeof(iv);
+        offset += 4; /* padding */
+
+        encr_data_len = tgtsize - sizeof(tag) - offset;
+	encr_data = (uint8_t *)malloc(encr_data_len);
+	if (!encr_data) {
+		MHVTL_ERR("Out of memory: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+	}
+
+        for (i = 0; i < encr_data_len; i++)
+        {
+                encr_data[i] = cbuf[offset + i];
+        }
+
+        offset += encr_data_len; 
+        for (i = 0; i < sizeof(tag); i++)
+        {
+                tag[i] = cbuf[offset + i];
+        }
+
+        ctx = EVP_CIPHER_CTX_new();
+        EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL);
+        EVP_DecryptInit_ex(ctx, NULL, NULL, data_encr_key, iv);
+        EVP_DecryptUpdate(ctx, NULL, &outlen, aad, aad_len);
+        EVP_DecryptUpdate(ctx, buf, &outlen, encr_data, encr_data_len);
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, sizeof(tag), tag);
+        rc = outlen;
+        rv = EVP_DecryptFinal_ex(ctx, buf, &outlen);
+
+        if (rv <= 0)
+        {
+		MHVTL_ERR("Decrypt failed: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+cleanup:
+        if (ctx)
+            EVP_CIPHER_CTX_free(ctx);
+
+        if (cbuf)
+            free(cbuf);
+        if (encr_data)
+            free(encr_data);
+
+        return rc;
+}
+
+
 /* Reed-Solomon CRC */
 static uint32_t mhvtl_rscrc(unsigned char const *buf, size_t size)
 {
@@ -348,7 +538,15 @@ int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8
 		rc = uncompress_lzo_block(bounce_buffer, blk_size, sam_stat);
 	else if (blk_flags & BLKHDR_FLG_ZLIB_COMPRESSED)
 		rc = uncompress_zlib_block(bounce_buffer, blk_size, sam_stat);
-	else {
+	else if (blk_flags & BLKHDR_FLG_AES_ENCRYPTED) {
+                MHVTL_LOG("Using AES decrypt");
+
+                blk_flags &= ~BLKHDR_FLG_CRC;
+                lbp_method = 0;
+
+		rc = decrypt_aes_block(bounce_buffer, blk_size, sam_stat);
+	} else {
+                MHVTL_ERR("Using plain old read");
 	/* If the tape block is uncompressed, we can read the number of bytes
 	   we need directly into the scsi read buffer and we are done.
 	*/

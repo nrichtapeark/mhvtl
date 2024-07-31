@@ -544,7 +544,20 @@ uint8_t valid_encryption_blk(struct scsi_cmd *cmd)
 	/* decryption logic */
 	correct_key = TRUE;
 
-	if (c_pos->blk_flags & BLKHDR_FLG_ENCRYPTED) {
+        if (c_pos->blk_flags & BLKHDR_FLG_AES_ENCRYPTED) {
+		if (lu_priv->DECRYPT_MODE > 1) {
+                        /* check for the existence of a key */
+			if (KEY_LENGTH <= 0) {
+				sam_data_protect(E_INCORRECT_KEY, sam_stat);
+				correct_key = FALSE;
+			}
+                } else if (lu_priv->DECRYPT_MODE == 1) {
+                        /* RAW read mode, it'll be fine */
+		} else {
+			sam_data_protect(E_UNABLE_TO_DECRYPT, sam_stat);
+			correct_key = FALSE;
+		}
+	} else if (c_pos->blk_flags & BLKHDR_FLG_ENCRYPTED) {
 		/* compare the keys */
 		if (lu_priv->DECRYPT_MODE > 1) {
 			if (c_pos->blk_encryption_info.key_length != KEY_LENGTH) {

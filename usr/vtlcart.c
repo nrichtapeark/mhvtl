@@ -1232,6 +1232,9 @@ int write_tape_block(const uint8_t *buffer, uint32_t blk_size,
 		unsigned int i;
 
 		raw_pos.hdr.blk_flags |= BLKHDR_FLG_ENCRYPTED;
+                if (!encryptp->key_length)
+                        raw_pos.hdr.blk_flags |= BLKHDR_FLG_AES_ENCRYPTED;
+
 		raw_pos.hdr.blk_encryption_info.ukad_length = encryptp->ukad_length;
 		for (i = 0; i < encryptp->ukad_length; ++i)
 			raw_pos.hdr.blk_encryption_info.ukad[i] = encryptp->ukad[i];

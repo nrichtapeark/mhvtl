@@ -107,7 +107,7 @@ dump_tape:	tape_util.o vtlcart.o libvtlscsi.so vtltape.h mhvtl_scsi.h \
 		crc32c.o crc32c.c mhvtl_io.o mhvtl_io.c \
 		reed-solomon.o reed-solomon.c
 	$(CC) $(CFLAGS) -o dump_tape crc32c.o mhvtl_io.o reed-solomon.o tape_util.o minilzo.o default_ssc_pm.o -L. \
-		-lz -L. -lvtlcart -lvtlscsi
+		-lz -lssl -lcrypto -L. -lvtlcart -lvtlscsi
 
 mktape:		mktape.c mktape.o vtlcart.o libvtlscsi.so vtltape.h vtllib.h \
 		../kernel/vtl_common.h
@@ -163,7 +163,7 @@ vtltape:	vtltape.o vtlcart.o vtllib.h vtltape.h mhvtl_scsi.h \
 		crc32c.o \
 		reed-solomon.o \
 		mhvtl_io.o \
-		-lz -lssl -L. -lvtlcart -lvtlscsi
+		-lz -lssl -lcrypto -L. -lvtlcart -lvtlscsi
 
 mhvtl-device-conf-generator: mhvtl-device-conf-generator.c
 

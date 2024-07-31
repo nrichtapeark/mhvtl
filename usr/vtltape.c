@@ -96,8 +96,6 @@ struct encryption app_encryption_state;		/* Stores the encryption info the appli
 #define	AKAD		app_encryption_state.akad
 #define	KEY		app_encryption_state.key
 
-#include <openssl/aes.h>
-#include <openssl/modes.h>
 #define	MKAD		app_encryption_state.mkad
 #define	MKAD_LENGTH	app_encryption_state.mkad_length
 
