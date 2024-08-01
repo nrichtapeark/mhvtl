@@ -326,14 +326,15 @@ static bool sldc_buffer_set_control(struct sldc_buffer *sldc, size_t idx)
         return true;
 }
 
-static bool sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed, size_t compressed_len, uint8_t *uncompressed, size_t uncompressed_buffer_len, size_t *uncompressed_size)
+static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed, size_t compressed_len, uint8_t *uncompressed, size_t uncompressed_buffer_len)
 {
         static int match_digits[] = {1, 2, 3, 4, 8};
         static int match_skip[] = {1, 1, 1, 1, 0};
 
-        bool success = false;
         size_t idx;
         struct byte_array results;
+
+        size_t uncompressed_size = 0;
 
         byte_buffer_init(&results, uncompressed_buffer_len + 4);
 
@@ -487,20 +488,19 @@ static bool sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed, s
                 }
         }
 
-        if (results.pos > uncompressed_buffer_len)
+        /* skip last 4 bytes of results */
+        uncompressed_size = results.pos-4;
+
+        if (uncompressed_size > uncompressed_buffer_len)
         {
                 MHVTL_ERR("SLDC uncompressed results are too large for buffer: %zu vs %zu", results.pos, uncompressed_buffer_len);
                 goto cleanup;
         }
 
-        /* skip last 4 bytes of results */
-        *uncompressed_size = results.pos-4;
-        memcpy(uncompressed, results.array, *uncompressed_size);
-
-        success = true;
+        memcpy(uncompressed, results.array, uncompressed_size);
 cleanup:
         byte_buffer_destroy(&results); 
-        return success;
+        return uncompressed_size;
 }
 
 static void sldc_buffer_destroy(struct sldc_buffer *sldc)
@@ -515,10 +515,11 @@ size_t sldc_decompress(uint8_t *compressed, size_t compressed_len, uint8_t *unco
 
         sldc_buffer_init(&sldc, 16 * 1024);
 
-        if (!sldc_buffer_extract(&sldc, compressed, compressed_len, uncompressed, uncompressed_len, &result_length))
+        result_length = sldc_buffer_extract(&sldc, compressed, compressed_len, uncompressed, uncompressed_len);
+
+        if (!result_length)
         {
             MHVTL_ERR("SLDC extract failed");
-            result_length = 0;
         }
 
         sldc_buffer_destroy(&sldc);
