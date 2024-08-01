@@ -1013,6 +1013,9 @@ int writeBlock(struct scsi_cmd *cmd, uint32_t src_sz)
 	} else if (*lu_priv->compressionFactor == MHVTL_NO_COMPRESSION) {
 		/* No compression - use the no-compression function */
 		return writeBlock_nocomp(cmd, lbp_sz, FALSE, lbp_method);
+        } else if (lu_priv->ENCRYPT_MODE == 1) {
+                /* Writing in encrypted EXTERNAL mode, data is  already compressed */
+                return writeBlock_nocomp(cmd, lbp_sz, FALSE, lbp_method);
 	} else {
 		switch (lu_priv->compressionType) {
 		case LZO:
