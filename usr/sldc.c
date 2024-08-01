@@ -187,7 +187,7 @@ struct byte_array
         size_t pos;
 };
 
-static bool byte_buffer_init(struct byte_array *ba, size_t initial_size)
+static bool byte_array_init(struct byte_array *ba, size_t initial_size)
 {
         ba->array = (uint8_t *)malloc(initial_size);
         if (!ba->array)
@@ -201,7 +201,7 @@ static bool byte_buffer_init(struct byte_array *ba, size_t initial_size)
         return true;
 }
 
-static bool byte_buffer_append(struct byte_array *ba, uint8_t byte)
+static bool byte_array_append(struct byte_array *ba, uint8_t byte)
 {
         if (ba->pos >= ba->size)
         {
@@ -221,7 +221,7 @@ static bool byte_buffer_append(struct byte_array *ba, uint8_t byte)
         return true;
 }
 
-static void byte_buffer_destroy(struct byte_array *ba)
+static void byte_array_destroy(struct byte_array *ba)
 {
         if (ba->array)
             free(ba->array);
@@ -278,7 +278,7 @@ static bool sldc_buffer_init(struct sldc_buffer *sldc, size_t history_buffer_siz
 static bool sldc_buffer_add_byte(struct sldc_buffer *sldc, uint8_t byte, struct byte_array *result)
 {
         history_buffer_add(&sldc->history, byte);
-        return byte_buffer_append(result, byte);
+        return byte_array_append(result, byte);
 }
 
 
@@ -336,7 +336,7 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
 
         size_t uncompressed_size = 0;
 
-        byte_buffer_init(&results, uncompressed_buffer_len + 4);
+        byte_array_init(&results, uncompressed_buffer_len + 4);
 
         bit_buffer_init(&sldc->bitset, compressed, compressed_len);
         history_buffer_reset(&sldc->history);
@@ -499,7 +499,7 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
 
         memcpy(uncompressed, results.array, uncompressed_size);
 cleanup:
-        byte_buffer_destroy(&results); 
+        byte_array_destroy(&results); 
         return uncompressed_size;
 }
 
