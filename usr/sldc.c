@@ -344,6 +344,10 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
         idx = sldc->last_idx;
         while (idx < sldc->bitset.size)
         {
+
+                uint8_t byte;
+                uint8_t test;
+
                 if (idx >= sldc->bitset.size - 8 || sldc->state == STATE_END)
                 {
                         if (sldc->state != STATE_END && sldc->state != STATE_SKIP)
@@ -355,11 +359,9 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
                         break;
                 }
 
-                uint8_t byte;
                 if (!bit_buffer_get_byte(&sldc->bitset, idx, &byte))
                         goto cleanup;
 
-                uint8_t test;
                 if (!bit_buffer_test(&sldc->bitset, idx+8, &test))
                         goto cleanup;
 
@@ -374,6 +376,7 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
                         if (sldc->state == STATE_SCHEME1)
                         {
                                 uint8_t bit;
+
                                 if (!bit_buffer_test(&sldc->bitset, idx, &bit))
                                         goto cleanup;
 
@@ -383,23 +386,27 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
                                         uint8_t raw_byte;
                                         if (!bit_buffer_get_byte(&sldc->bitset, idx + 1, &raw_byte))
                                                 goto cleanup;
+
                                         if (!sldc_buffer_add_byte(sldc, raw_byte, &results))
                                                 goto cleanup;
+
                                         idx += 9;
                                 }
                                 else
                                 {
-                                        /* Compressed reference to history buffer */
-                                        idx++;
 
-                                        /* get number of sequential 1's (0-4) */
-                                        int pow2 = 0;
-                                        int base = 0;
+                                        int pow2;
+                                        int base;
                                         int match_count;
                                         int displacement;
                                         uint8_t displacement_byte;
                                         int i;
 
+                                        /* Compressed reference to history buffer */
+                                        idx++;
+
+                                        /* get number of sequential 1's (0-4) */
+                                        pow2 = 0;
                                         for (i = 0; i < 4; i++)
                                         {
                                                 uint8_t test_bit;
@@ -416,6 +423,7 @@ static size_t sldc_buffer_extract(struct sldc_buffer *sldc, uint8_t *compressed,
                                         /* for 0-3, skip a 0. 4 1's has no 0 */
                                         idx += match_skip[pow2];
 
+                                        base = 0;
                                         for (i = 0; i < match_digits[pow2]; i++)
                                         {
                                                 uint8_t test_bit;
