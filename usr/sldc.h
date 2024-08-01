@@ -21,4 +21,6 @@
 
 #include "vtllib.h"
 
+size_t sldc_decompress(uint8_t *compressed, size_t compressed_len, uint8_t *uncompressed, size_t uncompressed_len);
+
 #endif /* _SLDC_H_ */

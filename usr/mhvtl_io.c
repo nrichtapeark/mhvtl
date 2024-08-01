@@ -42,6 +42,8 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 
+#include "sldc.h"
+
 extern int verbose;
 extern int debug;
 extern long my_id;
@@ -273,7 +275,7 @@ static char *hex_string(uint8_t *buffer, size_t len)
 }
 */
 
-static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
+static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz, uint8_t *sam_stat)
 {
         uint8_t aad[64];
         size_t aad_len;
@@ -298,6 +300,7 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
 
         EVP_CIPHER_CTX *ctx = NULL;
         int outlen, unecrypted_size;
+        size_t uncompressed_size;
 
         if (!c_pos)
         {
@@ -440,7 +443,8 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
                 goto cleanup;
         }
 
-        sbuf = (uint8_t *)malloc(tgtsize * 2);
+        /*
+        sbuf = (uint8_t *)malloc(request_sz);
         if (!sbuf)
         {
 		MHVTL_ERR("Out of memory: %d", __LINE__);
@@ -448,7 +452,18 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
                 rc = 0;
                 goto cleanup;
         }
+        */
 
+        uncompressed_size = sldc_decompress(dbuf, unecrypted_size, buf, request_sz);
+        if (!uncompressed_size)
+        {
+ 		MHVTL_ERR("SLDC Decompress failed: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
+        rc = (int)uncompressed_size;
 cleanup:
         if (ctx)
             EVP_CIPHER_CTX_free(ctx);
@@ -566,7 +581,7 @@ int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8
                 blk_flags &= ~BLKHDR_FLG_CRC;
                 lbp_method = 0;
 
-		rc = decrypt_aes_block(bounce_buffer, blk_size, sam_stat);
+		rc = decrypt_aes_block(bounce_buffer, blk_size, request_sz, sam_stat);
 	} else {
                 MHVTL_ERR("Using plain old read");
 	/* If the tape block is uncompressed, we can read the number of bytes
