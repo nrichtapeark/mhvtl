@@ -148,6 +148,7 @@ vtltape:	vtltape.o vtlcart.o vtllib.h vtltape.h mhvtl_scsi.h \
 		ait_pm.o t10000_pm.o ibm_03592_pm.o \
 		minilzo.o \
 		crc32c.o \
+		sldc.o \
 		reed-solomon.o \
 		be_byteshift.h \
 		mhvtl_io.o \

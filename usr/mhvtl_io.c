@@ -284,6 +284,8 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
         size_t i;
         size_t offset = 0;
         uint8_t *cbuf = NULL;
+        uint8_t *dbuf = NULL;
+        uint8_t *sbuf = NULL;
 	loff_t nread = 0;
         uint8_t data_encr_key[32];
         uint8_t mkad[40];
@@ -291,11 +293,11 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
         uint32_t disk_blk_size;
         int rc, rv;
 
-        static const unsigned char default_iv[] = {0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6 };
+        static const unsigned char default_iv[] = {0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6};
         AES_KEY aes_key;
 
         EVP_CIPHER_CTX *ctx = NULL;
-        int outlen;
+        int outlen, unecrypted_size;
 
         if (!c_pos)
         {
@@ -326,7 +328,6 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
                 rc = 0;
                 goto cleanup;
         }
-
 
         AES_set_decrypt_key(app_encryption_state.key, app_encryption_state.key_length * 8, &aes_key);
         if (AES_unwrap_key(&aes_key, default_iv, data_encr_key, mkad, sizeof(mkad)) <= 0)
@@ -413,14 +414,23 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
                 tag[i] = cbuf[offset + i];
         }
 
+        dbuf = (uint8_t *)malloc(encr_data_len);
+        if (!dbuf)
+        {
+		MHVTL_ERR("Out of memory: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
         ctx = EVP_CIPHER_CTX_new();
         EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL);
         EVP_DecryptInit_ex(ctx, NULL, NULL, data_encr_key, iv);
         EVP_DecryptUpdate(ctx, NULL, &outlen, aad, aad_len);
-        EVP_DecryptUpdate(ctx, buf, &outlen, encr_data, encr_data_len);
+        EVP_DecryptUpdate(ctx, dbuf, &outlen, encr_data, encr_data_len);
         EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, sizeof(tag), tag);
-        rc = outlen;
-        rv = EVP_DecryptFinal_ex(ctx, buf, &outlen);
+        unecrypted_size = outlen;
+        rv = EVP_DecryptFinal_ex(ctx, dbuf, &outlen);
 
         if (rv <= 0)
         {
@@ -430,10 +440,22 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint8_t *sam_stat)
                 goto cleanup;
         }
 
+        sbuf = (uint8_t *)malloc(tgtsize * 2);
+        if (!sbuf)
+        {
+		MHVTL_ERR("Out of memory: %d", __LINE__);
+		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                rc = 0;
+                goto cleanup;
+        }
+
 cleanup:
         if (ctx)
             EVP_CIPHER_CTX_free(ctx);
-
+        if (sbuf)
+            free(sbuf);
+        if (dbuf)
+            free(dbuf);
         if (cbuf)
             free(cbuf);
         if (encr_data)
