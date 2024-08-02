@@ -580,6 +580,9 @@ int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8
                 blk_flags &= ~BLKHDR_FLG_CRC;
                 lbp_method = 0;
 
+                /* This is checked below. We don't care about this for AES encrypted blocks. */
+                lbp_sz = blk_size;
+
 		rc = decrypt_aes_block(bounce_buffer, blk_size, request_sz, sam_stat);
 	} else {
                 MHVTL_ERR("Using plain old read");
