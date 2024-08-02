@@ -301,11 +301,12 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz
         EVP_CIPHER_CTX *ctx = NULL;
         int outlen, unecrypted_size;
         size_t uncompressed_size;
+        int use_mkad_as_dek;
 
         if (!c_pos)
         {
                 MHVTL_ERR("No c_pos: %d", __LINE__);
-                sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                sam_medium_error(E_UNABLE_TO_DECRYPT, sam_stat);
                 rc = 0;
                 goto cleanup;
         }
@@ -314,44 +315,53 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz
         if (!blk_encryption_info)
         {
                 MHVTL_ERR("No encryption data: %d", __LINE__);
-                sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                sam_medium_error(E_INCORRECT_KEY, sam_stat);
                 rc = 0;
                 goto cleanup;
         }
 
+        use_mkad_as_dek = 0;
         for (i = 0; i < sizeof(mkad); i++)
         {
                 mkad[i] = blk_encryption_info->mkad[i+4];
+                if (mkad[i])
+                    use_mkad_as_dek = 1;
         }
 
         if (app_encryption_state.key_length <= 0)
         {
                 MHVTL_ERR("No encryption key data: %d", __LINE__);
-                sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+                sam_medium_error(E_UNABLE_TO_DECRYPT, sam_stat);
                 rc = 0;
                 goto cleanup;
         }
 
-        AES_set_decrypt_key(app_encryption_state.key, app_encryption_state.key_length * 8, &aes_key);
-        if (AES_unwrap_key(&aes_key, default_iv, data_encr_key, mkad, sizeof(mkad)) <= 0)
+        if (use_mkad_as_dek)
         {
-		MHVTL_ERR("Key unwrap failed: %d", __LINE__);
-		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
-                rc = 0;
-                goto cleanup;
+                AES_set_decrypt_key(app_encryption_state.key, app_encryption_state.key_length * 8, &aes_key);
+                if (AES_unwrap_key(&aes_key, default_iv, data_encr_key, mkad, sizeof(mkad)) <= 0)
+                {
+                        MHVTL_ERR("Key unwrap failed: %d", __LINE__);
+                        sam_medium_error(E_INCORRECT_KEY, sam_stat);
+                        rc = 0;
+                        goto cleanup;
+                }
+        }
+        else
+        {
+                for (i = 0; i < app_encryption_state.key_length; i++)
+                {
+                        data_encr_key[i] = app_encryption_state.key[i];
+                }
         }
 
-	/* The tape block is compressed.
-	   Save field values we will need after the read which
-	   causes the tape block to advance.
-	*/
 	disk_blk_size = c_pos->disk_blk_size;
 
 	cbuf = (uint8_t *)malloc(disk_blk_size);
 	if (!cbuf)
         {
 		MHVTL_ERR("Out of memory: %d", __LINE__);
-		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+		sam_medium_error(E_UNABLE_TO_DECRYPT, sam_stat);
                 rc = 0;
                 goto cleanup;
 	}
@@ -372,14 +382,14 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz
                 goto cleanup;
         }
 
-        if (cbuf[16] && cbuf[17] && cbuf[18] && cbuf[19])
+        if (cbuf[3] == 0x01)
         {
-                /* Looks like an LTO4 */
+                /* Looks like an LTO4-5 */
                 aad_len = 16;
         }
         else
         {
-                /* Looks like an LTO5+ */
+                /* Looks like an LTO6+ */
                 aad_len = 64;
         }
 
@@ -401,7 +411,7 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz
 	encr_data = (uint8_t *)malloc(encr_data_len);
 	if (!encr_data) {
 		MHVTL_ERR("Out of memory: %d", __LINE__);
-		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+		sam_medium_error(E_UNABLE_TO_DECRYPT, sam_stat);
                 rc = 0;
                 goto cleanup;
 	}
@@ -421,7 +431,7 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz
         if (!dbuf)
         {
 		MHVTL_ERR("Out of memory: %d", __LINE__);
-		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+		sam_medium_error(E_UNABLE_TO_DECRYPT, sam_stat);
                 rc = 0;
                 goto cleanup;
         }
@@ -438,23 +448,12 @@ static int decrypt_aes_block(uint8_t *buf, uint32_t tgtsize, uint32_t request_sz
         if (rv <= 0)
         {
 		MHVTL_ERR("Decrypt failed: %d", __LINE__);
-		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
+		sam_medium_error(E_INCORRECT_KEY, sam_stat);
                 rc = 0;
                 goto cleanup;
         }
 
-        /*
-        sbuf = (uint8_t *)malloc(request_sz);
-        if (!sbuf)
-        {
-		MHVTL_ERR("Out of memory: %d", __LINE__);
-		sam_medium_error(E_DECOMPRESSION_CRC, sam_stat);
-                rc = 0;
-                goto cleanup;
-        }
-        */
-
-        uncompressed_size = sldc_decompress(dbuf, unecrypted_size, buf, request_sz);
+        uncompressed_size = sldc_decompress(dbuf, unecrypted_size, buf, request_sz, aad_len == 64 ? 16*1024 : 1024);
         if (!uncompressed_size)
         {
  		MHVTL_ERR("SLDC Decompress failed: %d", __LINE__);

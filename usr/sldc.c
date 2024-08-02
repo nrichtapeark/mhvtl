@@ -516,12 +516,12 @@ static void sldc_buffer_destroy(struct sldc_buffer *sldc)
         history_buffer_destroy(&sldc->history);
 }
 
-size_t sldc_decompress(uint8_t *compressed, size_t compressed_len, uint8_t *uncompressed, size_t uncompressed_len)
+size_t sldc_decompress(uint8_t *compressed, size_t compressed_len, uint8_t *uncompressed, size_t uncompressed_len, int history_buffer_size)
 {
         struct sldc_buffer sldc;
         size_t result_length;
 
-        sldc_buffer_init(&sldc, 16 * 1024);
+        sldc_buffer_init(&sldc, history_buffer_size);
 
         result_length = sldc_buffer_extract(&sldc, compressed, compressed_len, uncompressed, uncompressed_len);
 
