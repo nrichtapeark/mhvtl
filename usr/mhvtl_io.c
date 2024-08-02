@@ -584,6 +584,8 @@ int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8
                 lbp_sz = blk_size;
 
 		rc = decrypt_aes_block(bounce_buffer, blk_size, request_sz, sam_stat);
+                if (!rc)
+                        goto free_bounce_buf;
 	} else {
                 MHVTL_ERR("Using plain old read");
 	/* If the tape block is uncompressed, we can read the number of bytes
