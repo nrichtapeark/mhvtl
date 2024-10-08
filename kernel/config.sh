@@ -96,12 +96,22 @@ else
 fi >> "${output}"
 
 # check if scsi_host_template is const struct
-if grep -q 'const struct scsi_host_template' "${hdrs}/include/linux/scsi_host.h"; then
+if grep -q 'const struct scsi_host_template' "${hdrs}/include/scsi/scsi_host.h"; then
     echo "#ifndef DEFINE_CONST_STRUCT_SCSI_HOST_TEMPLATE"
     echo "#define DEFINE_CONST_STRUCT_SCSI_HOST_TEMPLATE"
     echo "#endif"
 else
     echo "#undef DEFINE_CONST_STRUCT_SCSI_HOST_TEMPLATE"
+fi >> "${output}"
+
+# check if bus_type->match()'s 2nd argument is a "const"
+if fgrep -q 'int (*match)(struct device *dev, const struct device_driver *drv);' \
+    "${hdrs}/include/linux/device/bus.h"; then
+    echo "#ifndef DEFINE_CONST_STRUCT_DEVICE_DRIVER"
+    echo "#define DEFINE_CONST_STRUCT_DEVICE_DRIVER"
+    echo "#endif"
+else
+    echo "#undef DEFINE_CONST_STRUCT_DEVICE_DRIVER"
 fi >> "${output}"
 
 printf '\n\n#endif /* _MHVTL_KERNEL_CONFIG_H */\n' >> "${output}"
