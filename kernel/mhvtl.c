@@ -18,11 +18,9 @@
  *   dpg: change style of boot options to "vtl.num_tgts=2" and
  *        module options to "modprobe vtl num_tgts=2" [20021221]
  *
- *	Mark Harvey 2005-6-1
+ *	Mark Harvey 2005 - 2025
  *
  *	markh794@gmail.com
- *	  or
- *	Current employ address: mark.harvey@nutanix.com
  *
  *	Pinched wholesale from scsi_debug.[ch]
  *
@@ -42,7 +40,7 @@
  *
  */
 
-#define pr_fmt(fmt) "%s:%s: " fmt, KBUILD_MODNAME, __func__
+#define pr_fmt(fmt) "%s: %s(): " fmt, KBUILD_MODNAME, __func__
 
 #include <linux/module.h>
 
@@ -106,9 +104,9 @@ struct scatterlist;
  #define VTL_VERSION "1.75"
 */
 #ifndef MHVTL_VERSION
-#define MHVTL_VERSION "0.18.32"
+#define MHVTL_VERSION "0.18.34"
 #endif
-static const char *mhvtl_version_date = "20230224-0";
+static const char *mhvtl_version_date = "20250212-0";
 static const char mhvtl_driver_name[] = "mhvtl";
 
 /* Additional Sense Code (ASC) used */
@@ -294,9 +292,13 @@ static void do_remove_driverfs_files(void);
 static int mhvtl_add_adapter(void);
 static void mhvtl_remove_adapter(void);
 
-static int mhvtl_slave_alloc(struct scsi_device *);
-static int mhvtl_slave_configure(struct scsi_device *);
-static void mhvtl_slave_destroy(struct scsi_device *);
+static int mhvtl_sdev_alloc(struct scsi_device *);
+#ifdef DEFINE_QUEUE_LIMITS_SCSI_DEV_CONFIGURE
+static int mhvtl_sdev_configure(struct scsi_device *, struct queue_limits *lim);
+#else
+static int mhvtl_sdev_configure(struct scsi_device *);
+#endif
+static void mhvtl_sdev_destroy(struct scsi_device *);
 #if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 9)
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 19, 0) || LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33))
 static int mhvtl_change_queue_depth(struct scsi_device *sdev, int qdepth);
@@ -339,9 +341,15 @@ static struct scsi_host_template mhvtl_driver_template = {
 #endif
 	.name =			"VTL",
 	.info =			mhvtl_info,
-	.slave_alloc =		mhvtl_slave_alloc,
-	.slave_configure =	mhvtl_slave_configure,
-	.slave_destroy =	mhvtl_slave_destroy,
+#ifdef DEFINE_QUEUE_LIMITS_SCSI_DEV_CONFIGURE
+	.sdev_init =            mhvtl_sdev_alloc,
+        .sdev_configure =       mhvtl_sdev_configure,
+	.sdev_destroy =         mhvtl_sdev_destroy,
+#else
+	.slave_alloc =		mhvtl_sdev_alloc,
+	.slave_configure =	mhvtl_sdev_configure,
+	.slave_destroy =	mhvtl_sdev_destroy,
+#endif
 	.ioctl =		mhvtl_b_ioctl,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
 	.queuecommand =		mhvtl_queuecommand,
@@ -537,7 +545,7 @@ static int mhvtl_q_cmd(struct scsi_cmnd *scp,
 
 	sqcp = kmalloc(sizeof(*sqcp), GFP_ATOMIC);
 	if (!sqcp) {
-		pr_err("%s: %s kmalloc failed\n", mhvtl_driver_name, __func__);
+		pr_err("kmalloc failed %ld bytes\n", sizeof(*sqcp));
 		return 1;
 	}
 
@@ -593,18 +601,18 @@ static int _mhvtl_queuecommand_lck(struct scsi_cmnd *SCpnt, done_funct_t done)
 		MHVTL_DBG_PRT_CDB(1, serial_number, cmd, SCpnt->cmd_len);
 
 	if (SCpnt->device->id == mhvtl_driver_template.this_id) {
-		pr_err("%s: initiator's id used as target!\n", mhvtl_driver_name);
+		pr_err("initiator's id used as target!\n");
 		return mhvtl_schedule_resp(SCpnt, NULL, done, DID_NO_CONNECT << 16);
 	}
 
 	if (SCpnt->device->lun >= mhvtl_max_luns) {
-		pr_err("%s: %s max luns exceeded\n", mhvtl_driver_name, __func__);
+		pr_err("Max luns exceeded\n");
 		return mhvtl_schedule_resp(SCpnt, NULL, done, DID_NO_CONNECT << 16);
 	}
 
 	lu = devInfoReg(SCpnt->device);
 	if (NULL == lu) {
-		pr_err("%s: %s could not find lu\n", mhvtl_driver_name, __func__);
+		pr_err("Could not find lu\n");
 		return mhvtl_schedule_resp(SCpnt, NULL, done, DID_NO_CONNECT << 16);
 	}
 
@@ -682,7 +690,7 @@ static int mhvtl_change_queue_depth(struct scsi_device *sdev, int qdepth,
 					int reason)
 #endif
 {
-	pr_info("mhvtl %s(%d)\n", __func__, qdepth);
+	pr_info("queue depth now %d\n", qdepth);
 
 	if (qdepth < 1)
 		qdepth = 1;
@@ -724,7 +732,7 @@ static int mhvtl_b_ioctl(struct scsi_device *sdp, unsigned int cmd, void __user 
 static int mhvtl_b_ioctl(struct scsi_device *sdp, int cmd, void __user *arg)
 #endif
 {
-	pr_debug("ioctl: cmd=0x%x\n", cmd);
+	pr_debug("cmd=0x%x\n", cmd);
 
 	return -ENOTTY;
 }
@@ -807,8 +815,7 @@ static void mhvtl_timer_intr_handler(unsigned long indx)
 	}
 
 	if (!sqcp) {
-		pr_err("%s: %s: Unexpected interrupt, indx %ld\n",
-					mhvtl_driver_name, __func__, (unsigned long)indx);
+		pr_err("Unexpected interrupt, indx %ld\n", (unsigned long)indx);
 		return;
 	}
 
@@ -821,12 +828,12 @@ static void mhvtl_timer_intr_handler(unsigned long indx)
 	mhvtl_remove_sqcp(lu, sqcp);
 }
 
-static int mhvtl_slave_alloc(struct scsi_device *sdp)
+static int mhvtl_sdev_alloc(struct scsi_device *sdp)
 {
 	struct mhvtl_hba_info *mhvtl_hba;
 	struct mhvtl_lu_info *lu = (struct mhvtl_lu_info *)sdp->hostdata;
 
-	pr_debug("slave_alloc <%u %u %u %llu>\n",
+	pr_debug("<%u %u %u %llu>\n",
 			sdp->host->host_no, sdp->channel, sdp->id,
 			(unsigned long long)sdp->lun);
 
@@ -835,7 +842,7 @@ static int mhvtl_slave_alloc(struct scsi_device *sdp)
 
 	mhvtl_hba = *(struct mhvtl_hba_info **) sdp->host->hostdata;
 	if (!mhvtl_hba) {
-		pr_err("%s: Host info NULL\n", mhvtl_driver_name);
+		pr_err("Host info NULL\n");
 		return -1;
 	}
 
@@ -850,11 +857,16 @@ static int mhvtl_slave_alloc(struct scsi_device *sdp)
 	return -1;
 }
 
-static int mhvtl_slave_configure(struct scsi_device *sdp)
+
+#ifdef DEFINE_QUEUE_LIMITS_SCSI_DEV_CONFIGURE
+static int mhvtl_sdev_configure(struct scsi_device *sdp, struct queue_limits *lim)
+#else
+static int mhvtl_sdev_configure(struct scsi_device *sdp)
+#endif
 {
 	struct mhvtl_lu_info *lu;
 
-	pr_debug("slave_configure <%u %u %u %llu>\n",
+	pr_debug("<%u %u %u %llu>\n",
 			sdp->host->host_no, sdp->channel, sdp->id,
 			(unsigned long long)sdp->lun);
 	if (sdp->host->max_cmd_len != VTL_MAX_CMD_LEN)
@@ -871,11 +883,11 @@ static int mhvtl_slave_configure(struct scsi_device *sdp)
 	return 0;
 }
 
-static void mhvtl_slave_destroy(struct scsi_device *sdp)
+static void mhvtl_sdev_destroy(struct scsi_device *sdp)
 {
 	struct mhvtl_lu_info *lu = (struct mhvtl_lu_info *)sdp->hostdata;
 
-	pr_notice("slave_destroy <%u %u %u %llu>\n",
+	pr_notice("<%u %u %u %llu>\n",
 			sdp->host->host_no, sdp->channel, sdp->id,
 			(unsigned long long)sdp->lun);
 	if (lu) {
@@ -897,7 +909,7 @@ static struct mhvtl_lu_info *devInfoReg(struct scsi_device *sdp)
 
 	mhvtl_hba = *(struct mhvtl_hba_info **) sdp->host->hostdata;
 	if (!mhvtl_hba) {
-		pr_err("%s: %s Host info NULL\n", mhvtl_driver_name, __func__);
+		pr_err("Host info NULL\n");
 		return NULL;
 	}
 
@@ -1048,8 +1060,8 @@ struct scsi_device *__scsi_add_device(struct Scsi_Host *hpnt, uint channel, uint
  * According to scsi_mid_low_api.txt
  *
  * A call from LLD scsi_add_device() will result in SCSI mid layer
- *   -> slave_alloc()
- *   -> slave_configure()
+ *   -> sdev_alloc()
+ *   -> sdev_configure()
  */
 static int mhvtl_add_device(unsigned int minor, struct mhvtl_ctl *ctl)
 {
@@ -1059,13 +1071,13 @@ static int mhvtl_add_device(unsigned int minor, struct mhvtl_ctl *ctl)
 	int error = 0;
 
 	if (devp[minor]) {
-		pr_notice("device struct already in place");
+		pr_notice("device struct already in place\n");
 		return error;
 	}
 
 	mhvtl_hba = mhvtl_get_hba_entry();
 	if (!mhvtl_hba) {
-		pr_err("mhvtl_ost info struct is NULL");
+		pr_err("mhvtl_ost info struct is NULL\n");
 		return -ENOTTY;
 	}
 	pr_debug("mhvtl_hba_info struct is %p\n", mhvtl_hba);
@@ -1079,8 +1091,7 @@ static int mhvtl_add_device(unsigned int minor, struct mhvtl_ctl *ctl)
 
 	lu = kmalloc(sizeof(*lu), GFP_KERNEL);
 	if (!lu) {
-		pr_err("%s: %s line %d - out of memory\n",
-						mhvtl_driver_name, __func__, __LINE__);
+		pr_err("line %d - out of memory attempting to kmalloc %ld bytes\n", __LINE__, sizeof(*lu));
 		return -ENOMEM;
 	}
 	memset(lu, 0, sizeof(*lu));
@@ -1183,8 +1194,7 @@ static ssize_t add_lu_store(struct device_driver *ddp,
 	char str[512];
 
 	if (strncmp(buf, "add", 3)) {
-		pr_err("%s: %s Invalid command: %s\n",
-				mhvtl_driver_name, __func__, buf);
+		pr_err("Invalid command: %s\n", buf);
 		return count;
 	}
 
@@ -1236,38 +1246,38 @@ static int __init mhvtl_init(void)
 
 	mhvtl_major = register_chrdev(mhvtl_major, "mhvtl", &mhvtl_fops);
 	if (mhvtl_major < 0) {
-		pr_crit("%s: can't get major number\n", mhvtl_driver_name);
+		pr_crit("Can't get major number\n");
 		goto register_chrdev_error;
 	}
 
 	ret = device_register(&mhvtl_pseudo_primary);
 	if (ret < 0) {
-		pr_crit("%s: device_register error: %d\n", mhvtl_driver_name, ret);
+		pr_crit("Device_register error: %d\n", ret);
 		goto device_register_error;
 	}
 
 	ret = bus_register(&mhvtl_pseudo_lld_bus);
 	if (ret < 0) {
-		pr_crit("%s: bus_register error: %d\n", mhvtl_driver_name, ret);
+		pr_crit("Bus_register error: %d\n", ret);
 		goto bus_register_error;
 	}
 
 	ret = driver_register(&mhvtl_driverfs_driver);
 	if (ret < 0) {
-		pr_crit("%s: driver_register error: %d\n", mhvtl_driver_name, ret);
+		pr_crit("Driver_register error: %d\n", ret);
 		goto driver_register_error;
 	}
 
 	ret = do_create_driverfs_files();
 	if (ret < 0) {
-		pr_crit("%s: driver_create_file error: %d\n", mhvtl_driver_name, ret);
+		pr_crit("Driver_create_file error: %d\n", ret);
 		goto do_create_driverfs_error;
 	}
 
 	mhvtl_add_host = 0;
 
 	if (mhvtl_add_adapter()) {
-		pr_crit("%s: %s mhvtl_add_adapter failed\n", mhvtl_driver_name, __func__);
+		pr_crit("mhvtl_add_adapter failed\n");
 		goto mhvtl_add_adapter_error;
 	}
 
@@ -1278,7 +1288,7 @@ static int __init mhvtl_init(void)
 				sizeof(struct mhvtl_ds), 0, SLAB_HWCACHE_ALIGN,
 				0, sizeof(struct mhvtl_ds), NULL);
 	if (!dsp) {
-		pr_err("%s: %s unable to create ds cache", mhvtl_driver_name, __func__);
+		pr_err("Unable to create ds cache");
 		goto mhvtl_kmem_cache_error;
 	}
 
@@ -1286,8 +1296,7 @@ static int __init mhvtl_init(void)
 				SG_SEGMENT_SZ, 0, SLAB_HWCACHE_ALIGN,
 				0, SG_SEGMENT_SZ, NULL);
 	if (!sgp) {
-		pr_err("%s: %s unable to create sg cache (size %d)",
-				mhvtl_driver_name, __func__, (int)SG_SEGMENT_SZ);
+		pr_err("Unable to create sg cache (size %d)", (int)SG_SEGMENT_SZ);
 		goto mhvtl_kmem_cache_error;
 	} else {
 		pr_info("kmem_cache_user_copy: page size: %d", (int)SG_SEGMENT_SZ);
@@ -1329,8 +1338,7 @@ static void __exit mhvtl_exit(void)
 		mhvtl_remove_adapter();
 
 	if (mhvtl_add_host != 0)
-		pr_err("mhvtl %s: mhvtl_remove_adapter "
-			"error at line %d\n", __func__, __LINE__);
+		pr_err("mhvtl_remove_adapter error at line %d\n", __LINE__);
 
 	do_remove_driverfs_files();
 	driver_unregister(&mhvtl_driverfs_driver);
@@ -1346,7 +1354,7 @@ module_exit(mhvtl_exit);
 
 static void mhvtl_pseudo_release(struct device *dev)
 {
-	pr_notice("%s: %s() called\n", mhvtl_driver_name, __func__);
+	pr_notice("Called\n");
 }
 
 static struct device mhvtl_pseudo_primary = {
@@ -1392,8 +1400,7 @@ static int mhvtl_add_adapter(void)
 	mhvtl_hba = kmalloc(sizeof(*mhvtl_hba), GFP_KERNEL);
 
 	if (!mhvtl_hba) {
-		pr_err("%s: out of memory at line %d\n",
-						__func__, __LINE__);
+		pr_err("Unable to kmalloc %ld bytes of memory at line %d\n", sizeof(*mhvtl_hba), __LINE__);
 		return -ENOMEM;
 	}
 
@@ -1453,7 +1460,7 @@ static int mhvtl_driver_probe(struct device *dev)
 
 	hpnt = scsi_host_alloc(&mhvtl_driver_template, sizeof(*mhvtl_hba));
 	if (NULL == hpnt) {
-		pr_err("%s: scsi_register failed\n", __func__);
+		pr_err("scsi_register failed\n");
 		error = -ENODEV;
 		return error;
 	}
@@ -1468,7 +1475,7 @@ static int mhvtl_driver_probe(struct device *dev)
 
 	error = scsi_add_host(hpnt, &mhvtl_hba->dev);
 	if (error) {
-		pr_err("%s: scsi_add_host failed\n", __func__);
+		pr_err("scsi_add_host failed\n");
 		error = -ENODEV;
 		scsi_host_put(hpnt);
 	} else
@@ -1486,7 +1493,7 @@ static int mhvtl_driver_remove(struct device *dev)
 	mhvtl_hba = to_mhvtl_hba(dev);
 
 	if (!mhvtl_hba) {
-		pr_err("%s: Unable to locate host info\n", __func__);
+		pr_err("Unable to locate host info\n");
 		return -ENODEV;
 	}
 
@@ -1555,15 +1562,13 @@ static int mhvtl_put_user_data(unsigned int minor, char __user *arg)
 
 	ds = kmem_cache_alloc(dsp, 0);
 	if (!ds) {
-		pr_err("%s(): Failed to allocate kmem_cache",
-						__func__);
+		pr_err("Failed to allocate kmem_cache\n");
 		ret = -EFAULT;
 		goto give_up;
 	}
 
 	if (copy_from_user((u8 *)ds, (u8 *)arg, sizeof(struct mhvtl_ds))) {
-		pr_err("%s(): Failed to copy from user %ld bytes",
-						__func__, (unsigned long)sizeof(struct mhvtl_ds));
+		pr_err("Failed to copy from user %ld bytes", (unsigned long)sizeof(struct mhvtl_ds));
 		ret = -EFAULT;
 		goto give_up;
 	}
@@ -1574,9 +1579,8 @@ static int mhvtl_put_user_data(unsigned int minor, char __user *arg)
 						ds->sam_stat, ds->sam_stat);
 	sqcp = lookup_sqcp(devp[minor], ds->serialNo);
 	if (!sqcp) {
-		pr_err("%s: callback function not found for "
-				"SCSI cmd s/no. %lld, minor: %d\n",
-				__func__, (unsigned long long)ds->serialNo,
+		pr_err("Callback function not found for SCSI cmd s/no. %lld, minor: %d\n",
+				(unsigned long long)ds->serialNo,
 				minor);
 		ret = 1;	/* report busy to mid level */
 		goto give_up;
@@ -1600,8 +1604,7 @@ static int mhvtl_put_user_data(unsigned int minor, char __user *arg)
 	if (sqcp->done_funct)
 		sqcp->done_funct(sqcp->a_cmnd);
 	else
-		pr_err("%s FATAL, line %d: SCSI done_funct callback => NULL\n",
-						__func__, __LINE__);
+		pr_err("FATAL, line %d: SCSI done_funct callback => NULL\n", __LINE__);
 	mhvtl_remove_sqcp(devp[minor], sqcp);
 
 	ret = 0;
@@ -1668,8 +1671,7 @@ static int mhvtl_remove_lu(unsigned int minor, char __user *arg)
 		goto give_up;
 	}
 
-	pr_debug("ioctl to remove device <c t l> "
-		"<%02d %02d %02d>, hba: %p\n",
+	pr_debug("ioctl to remove device <c t l> <%02d %02d %02d>, hba: %p\n",
 			ctl.channel, ctl.id, ctl.lun, mhvtl_hba);
 
 	list_for_each_entry_safe(lu, n, &mhvtl_hba->lu_list, lu_sibling) {
@@ -1701,7 +1703,7 @@ static long mhvtl_c_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 
 	struct inode *inode = file_inode(file);
 	if (!inode) {
-		pr_err("%s() : Unable to obtain inode - inode is null", __func__);
+		pr_err("Unable to obtain inode - inode is null\n");
 		return -ENODEV;
 	}
 
