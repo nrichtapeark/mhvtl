@@ -192,7 +192,7 @@ uint8_t complete_read_6(struct scsi_cmd *cmd, int sz, int count)
 			return SAM_STAT_CHECK_CONDITION;
 		/* If LBP Read bit is set, pass through the LBP_method 0: off, 1 RS-CRC, 2 CRC32C */
 		lbp_method = (lu_ssc->LBP_R) ? lu_ssc->LBP_method : 0;
-		retval = readBlock(buf, sz, cdb[1] & SILI, lbp_method, sam_stat);
+		retval = readBlock(buf, sz, cdb[1] & SILI, lbp_method, sam_stat, lu_ssc);
 		if (!retval && fixed) {
 			/* Fixed block read hack:
 			 *

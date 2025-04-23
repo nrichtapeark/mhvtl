@@ -496,7 +496,7 @@ static uint32_t mhvtl_crc32c(unsigned char const *buf, size_t size)
  * Return number of bytes read.
  *        0 on error with sense[] filled in...
  */
-int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8_t *sam_stat)
+int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8_t *sam_stat, struct priv_lu_ssc *lu_priv)
 {
 	uint32_t disk_blk_size, blk_size;
 	uint32_t rc;
@@ -574,7 +574,7 @@ int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8
 		rc = uncompress_lzo_block(bounce_buffer, blk_size, sam_stat);
 	else if (blk_flags & BLKHDR_FLG_ZLIB_COMPRESSED)
 		rc = uncompress_zlib_block(bounce_buffer, blk_size, sam_stat);
-	else if (blk_flags & BLKHDR_FLG_AES_ENCRYPTED) {
+	else if (blk_flags & BLKHDR_FLG_AES_ENCRYPTED && lu_priv->DECRYPT_MODE == 2) {
                 MHVTL_LOG("Using AES decrypt");
 
                 blk_flags &= ~BLKHDR_FLG_CRC;
@@ -583,7 +583,7 @@ int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp_method, uint8
                 /* This is checked below. We don't care about this for AES encrypted blocks. */
                 lbp_sz = blk_size;
 
-		rc = decrypt_aes_block(bounce_buffer, blk_size, request_sz, sam_stat);
+                rc = decrypt_aes_block(bounce_buffer, blk_size, request_sz, sam_stat);
                 if (!rc)
                         goto free_bounce_buf;
 	} else {

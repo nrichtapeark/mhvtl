@@ -203,7 +203,7 @@ struct verify_6_bits {
 
 void ssc_personality_module_register(struct ssc_personality_template *pm);
 
-int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp, uint8_t *sam_stat);
+int readBlock(uint8_t *buf, uint32_t request_sz, int sili, int lbp, uint8_t *sam_stat, struct priv_lu_ssc *lu_priv);
 int writeBlock(struct scsi_cmd *cmd, uint32_t request_sz);
 
 uint8_t ssc_a3_service_action(struct scsi_cmd *cmd);
