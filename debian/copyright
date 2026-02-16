@@ -1,0 +1,11 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mhvtl
+Source: https://github.com/markh794/mhvtl
+
+Files: *
+Copyright: 2005-2025 mhvtl contributors
+License: GPL-2+
+
+License: GPL-2+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License version 2 or later.

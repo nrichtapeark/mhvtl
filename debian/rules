@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/pkg-info.mk
+
+export DEB_BUILD_OPTIONS=parallel=1
+
+%:
+	dh $@
+
+override_dh_auto_test:
+	@echo "Skipping test suite (not available for mhvtl)"
+
+override_dh_auto_install:
+	# install userland
+	dh_auto_install
+
+	# install dkms source
+	mkdir -p $(CURDIR)/debian/tmp/usr/src/mhvtl-$(DEB_VERSION_UPSTREAM)
+	cp -a kernel/* \
+	  $(CURDIR)/debian/tmp/usr/src/mhvtl-$(DEB_VERSION_UPSTREAM)/

@@ -1,0 +1,6 @@
+etc/mhvtl/*
+lib/*
+opt/*
+usr/bin/*
+usr/lib/*
+usr/share/*

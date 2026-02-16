@@ -1,0 +1,7 @@
+mhvtl (1.7.2-1ubuntu1) noble; urgency=medium
+
+  * Initial Debian/Ubuntu packaging.
+  * Adapt build for Ubuntu toolchain.
+  * Sync with upstream master.
+
+ -- Maarten Jacobs <maarten256@outlook.com>  Tue, 07 Jan 2026 20:15:00 +0000

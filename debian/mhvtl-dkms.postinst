@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+PACKAGE=mhvtl
+VERSION=1.7.2
+
+case "$1" in
+  configure)
+    if command -v dkms >/dev/null 2>&1; then
+      dkms add -m $PACKAGE -v $VERSION || true
+      dkms build -m $PACKAGE -v $VERSION
+      dkms install -m $PACKAGE -v $VERSION
+    fi
+    ;;
+esac
+
+exit 0

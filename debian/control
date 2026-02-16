@@ -1,0 +1,29 @@
+Source: mhvtl
+Section: admin
+Priority: optional
+Maintainer: Maarten Jacobs <maarten256@outlook.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ zlib1g-dev
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: mhvtl
+Architecture: amd64
+Depends:
+ ${shlibs:Depends}, ${misc:Depends},
+ sg3-utils, mhvtl-dkms
+Recommends: mt-st, lsscsi
+Description: Virtual tape library for Linux
+ mhvtl provides a SCSI-based virtual tape library
+ used for testing backup and archival software.
+
+Package: mhvtl-dkms
+Architecture: all
+Depends:
+ dkms,
+ linux-headers-generic | linux-headers,
+ ${misc:Depends}
+Description: DKMS kernel module for mhvtl
+ This package provides the mhvtl kernel module
+ built via DKMS for the running kernel.
