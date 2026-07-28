@@ -2244,24 +2244,11 @@ void init_smc_mode_pages(struct lu_phy_attr *lu) {
 	add_mode_device_capabilities(lu);
 }
 
-void bubbleSort(int *array, int size) {
-	int swapped;
-	int i;
-	int j;
+static int cmp_int(const void *a, const void *b) {
+	int x = *(const int *)a;
+	int y = *(const int *)b;
 
-	for (i = 1; i < size; i++) {
-		swapped = 0;
-		for (j = 0; j < size - i; j++) {
-			if (array[j] > array[j + 1]) {
-				int temp	 = array[j];
-				array[j]	 = array[j + 1];
-				array[j + 1] = temp;
-				swapped		 = 1;
-			}
-		}
-		if (!swapped)
-			break; /* if it is sorted then stop */
-	}
+	return (x > y) - (x < y);
 }
 
 void sort_library_slot_type(struct lu_phy_attr *lu, struct smc_type_slot *type) {
@@ -2274,7 +2261,7 @@ void sort_library_slot_type(struct lu_phy_attr *lu, struct smc_type_slot *type) 
 	arr[2] = smc_p->pm->start_map;
 	arr[3] = smc_p->pm->start_storage;
 
-	bubbleSort(arr, 4);
+	qsort(arr, 4, sizeof(arr[0]), cmp_int);
 
 	for (i = 0; i < 4; i++) {
 		if (smc_p->pm->start_drive == arr[i]) {

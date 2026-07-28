@@ -323,7 +323,6 @@ static void update_vpd_lbp(struct lu_phy_attr *lu) {
 }
 
 static void init_ult_inquiry(struct lu_phy_attr *lu) {
-	int		pg;
 	uint8_t worm;
 	uint8_t local_TapeAlert[8] =
 		{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -336,39 +335,19 @@ static void init_ult_inquiry(struct lu_phy_attr *lu) {
 	lu->inquiry[5] |= (((struct priv_lu_ssc *)lu->lu_private)->pm->drive_supports_LBP) ? 1 : 0;
 
 	/* Extended INQUIRY Data VPD page */
-	pg			   = PCODE_OFFSET(0x86);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_86_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0x86, VPD_86_SZ);
 	update_vpd_86(lu, ((struct priv_lu_ssc *)lu->lu_private)->pm);
 
 	/* Sequential Access device capabilities - Ref: 8.4.2 */
-	pg			   = PCODE_OFFSET(0xb0);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B0_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb0, VPD_B0_SZ);
 	update_vpd_b0(lu, &worm);
 
 	/* Manufacture-assigned serial number - Ref: 8.4.3 */
-	pg			   = PCODE_OFFSET(0xb1);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B1_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb1, VPD_B1_SZ);
 	update_vpd_b1(lu, lu->lu_serial_no);
 
 	/* TapeAlert supported flags - Ref: 8.4.4 */
-	pg			   = PCODE_OFFSET(0xb2);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B2_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb2, VPD_B2_SZ);
 	update_vpd_b2(lu, &local_TapeAlert);
 
 	/* Logical Block Protection - Ref: 6.3.13.13 (LTO-9 reference guide) */
@@ -376,31 +355,19 @@ static void init_ult_inquiry(struct lu_phy_attr *lu) {
 		/* two pages ? - one for CRC32C and one for RS-CRC */
 		int pg_size = (((struct priv_lu_ssc *)lu->lu_private)->pm->drive_supports_LBP == LBP_RSCRC) ? VPD_B5_SZ : VPD_B5_SZ + VPD_B5_SZ;
 
-		pg			   = PCODE_OFFSET(0xb5);
-		lu->lu_vpd[pg] = alloc_vpd(pg_size + 12); /* header page, one page for 'disabled' LBP + one or two for RS-CRC / CRC32C */
-		if (!lu->lu_vpd[pg]) {
-			MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-			exit(-ENOMEM);
-		}
+		/* header page, one page for 'disabled' LBP + one or two for
+		 * RS-CRC / CRC32C
+		 */
+		add_vpd_page(lu, 0xb5, pg_size + 12);
 		update_vpd_lbp(lu);
 	}
 
 	/* VPD page 0xC0 */
-	pg			   = PCODE_OFFSET(0xc0);
-	lu->lu_vpd[pg] = alloc_vpd(43);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xc0, 43);
 	update_vpd_ult_c0(lu);
 
 	/* VPD page 0xC1 */
-	pg			   = PCODE_OFFSET(0xc1);
-	lu->lu_vpd[pg] = alloc_vpd(28);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xc1, 28);
 	update_vpd_ult_c1(lu, lu->lu_serial_no);
 }
 

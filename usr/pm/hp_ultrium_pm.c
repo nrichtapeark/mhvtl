@@ -253,7 +253,6 @@ static void update_hp_vpd_cx(struct lu_phy_attr *lu, uint8_t pg, char *comp,
 }
 
 static void init_ult_inquiry(struct lu_phy_attr *lu) {
-	int		pg;
 	uint8_t worm;
 	uint8_t local_TapeAlert[8] =
 		{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -264,99 +263,49 @@ static void init_ult_inquiry(struct lu_phy_attr *lu) {
 
 	lu->inquiry[40] = worm; /* Reference 3.7.1 HP Ultrium ISV Cookbook */
 
-	pg			   = PCODE_OFFSET(0x86);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_86_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0x86, VPD_86_SZ);
 	update_vpd_86(lu, ((struct priv_lu_ssc *)lu->lu_private)->pm);
 
 	/* Sequential Access device capabilities - Ref: 8.4.2 */
-	pg			   = PCODE_OFFSET(0xb0);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B0_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb0, VPD_B0_SZ);
 	update_vpd_b0(lu, &worm);
 
 	/* Manufacture-assigned serial number - Ref: 8.4.3 */
-	pg			   = PCODE_OFFSET(0xb1);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B1_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb1, VPD_B1_SZ);
 	update_vpd_b1(lu, lu->lu_serial_no);
 
 	/* TapeAlert supported flags - Ref: 8.4.4 */
-	pg			   = PCODE_OFFSET(0xb2);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B2_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb2, VPD_B2_SZ);
 	update_vpd_b2(lu, &local_TapeAlert);
 
 	/* VPD page 0xC0 - Firmware revision page */
-	pg			   = PCODE_OFFSET(0xc0);
-	lu->lu_vpd[pg] = alloc_vpd(0x60);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
-	update_hp_vpd_cx(lu, pg, "Firmware", MHVTL_VERSION,
+	add_vpd_page(lu, 0xc0, 0x60);
+	update_hp_vpd_cx(lu, 0xc0, "Firmware", MHVTL_VERSION,
 					 "2012/04/18 19:38", "6");
 
 	/* VPD page 0xC1 - Hardware */
-	pg			   = PCODE_OFFSET(0xc1);
-	lu->lu_vpd[pg] = alloc_vpd(0x60);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
-	update_hp_vpd_cx(lu, pg, "Hardware", MHVTL_VERSION,
+	add_vpd_page(lu, 0xc1, 0x60);
+	update_hp_vpd_cx(lu, 0xc1, "Hardware", MHVTL_VERSION,
 					 "2012/04/18 06:53", "5");
 
 	/* VPD page 0xC2 - PCA */
-	pg			   = PCODE_OFFSET(0xc2);
-	lu->lu_vpd[pg] = alloc_vpd(0x60);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
-	update_hp_vpd_cx(lu, pg, "PCA", MHVTL_VERSION,
+	add_vpd_page(lu, 0xc2, 0x60);
+	update_hp_vpd_cx(lu, 0xc2, "PCA", MHVTL_VERSION,
 					 "1996/11/29 10:00", "4");
 
 	/* VPD page 0xC3 - Mechanism */
-	pg			   = PCODE_OFFSET(0xc3);
-	lu->lu_vpd[pg] = alloc_vpd(0x60);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
-	update_hp_vpd_cx(lu, pg, "Mechanism", MHVTL_VERSION,
+	add_vpd_page(lu, 0xc3, 0x60);
+	update_hp_vpd_cx(lu, 0xc3, "Mechanism", MHVTL_VERSION,
 					 "1992/08/11 10:00", "3");
 
 	/* VPD page 0xC4 - Head Assembly */
-	pg			   = PCODE_OFFSET(0xc4);
-	lu->lu_vpd[pg] = alloc_vpd(0x60);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
-	update_hp_vpd_cx(lu, pg, "Head Assy", MHVTL_VERSION,
+	add_vpd_page(lu, 0xc4, 0x60);
+	update_hp_vpd_cx(lu, 0xc4, "Head Assy", MHVTL_VERSION,
 					 "1966/07/28 10:00", "2");
 
 	/* VPD page 0xC5 - ACI */
-	pg			   = PCODE_OFFSET(0xc5);
-	lu->lu_vpd[pg] = alloc_vpd(0x60);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
-	update_hp_vpd_cx(lu, pg, "ACI", MHVTL_VERSION,
+	add_vpd_page(lu, 0xc5, 0x60);
+	update_hp_vpd_cx(lu, 0xc5, "ACI", MHVTL_VERSION,
 					 "1960/03/10 10:00", "1");
 }
 

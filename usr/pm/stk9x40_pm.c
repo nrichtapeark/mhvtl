@@ -324,7 +324,6 @@ static struct ssc_personality_template ssc_pm = {
 
 #define INQUIRY_LEN 74
 static void init_9840_inquiry(struct lu_phy_attr *lu) {
-	int		pg;
 	uint8_t worm;
 
 	worm = ((struct priv_lu_ssc *)lu->lu_private)->pm->drive_supports_WORM;
@@ -337,12 +336,7 @@ static void init_9840_inquiry(struct lu_phy_attr *lu) {
 	lu->inquiry[55] = 0x12;			   /* Support Encryption & Compression */
 
 	/* Sequential Access device capabilities - Ref: 8.4.2 */
-	pg			   = PCODE_OFFSET(0xb0);
-	lu->lu_vpd[pg] = alloc_vpd(VPD_B0_SZ);
-	if (!lu->lu_vpd[pg]) {
-		MHVTL_ERR("Failed to malloc(): Line %d", __LINE__);
-		exit(-ENOMEM);
-	}
+	add_vpd_page(lu, 0xb0, VPD_B0_SZ);
 	update_vpd_b0(lu, &worm);
 }
 

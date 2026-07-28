@@ -816,6 +816,7 @@ void log_opcode(char *opcode, struct scsi_cmd *cmd);
 
 struct vpd *alloc_vpd(uint16_t sz);
 void		dealloc_vpd(struct vpd *pg);
+struct vpd *add_vpd_page(struct lu_phy_attr *lu, uint8_t pcode, uint16_t sz);
 void		cleanup_density_support(struct list_head *l);
 
 void completeSCSICommand(int, struct mhvtl_ds *ds);
@@ -866,7 +867,6 @@ void		 mam_space_remaining(struct MAM *mamp);
 char *slot_type_str(int type);
 void  init_smc_log_pages(struct lu_phy_attr *lu);
 void  init_smc_mode_pages(struct lu_phy_attr *lu);
-void  bubbleSort(int *array, int size);
 void  sort_library_slot_type(struct lu_phy_attr *lu, struct smc_type_slot *type);
 
 void ymd(int *year, int *month, int *day, int *hh, int *min, int *sec);
