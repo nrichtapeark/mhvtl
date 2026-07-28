@@ -2381,7 +2381,6 @@ int main(int argc, char *argv[]) {
 	unsigned	minor	 = 0;
 
 	struct mhvtl_header	 mhvtl_cmd;
-	struct mhvtl_header *cmd;
 	struct mhvtl_ctl	 ctl;
 
 	/* Message Q */
@@ -2594,7 +2593,7 @@ int main(int argc, char *argv[]) {
 				time_to_exit = 1; /* Flag that we need to exit */
 				MHVTL_DBG(1, "Exit called");
 			}
-		} else if (mlen < 0) {
+		} else if (mlen < 0 && errno != ENOMSG && errno != EINTR) {
 			if ((r_qid = init_queue()) == -1) {
 				MHVTL_ERR("Can not open message queue: %s",
 						  strerror(errno));
@@ -2632,17 +2631,9 @@ int main(int argc, char *argv[]) {
 				fflush(NULL);
 			switch (ret) {
 			case VTL_QUEUE_CMD: /* A cdb to process */
-				cmd = malloc(sizeof(struct mhvtl_header));
-				if (!cmd) {
-					MHVTL_ERR("Out of memory");
-					sleep_time = 1000000;
-				} else {
-					memcpy(cmd, &mhvtl_cmd, sizeof(mhvtl_cmd));
-					process_cmd(cdev, buf, cmd, sleep_time);
-					/* Something to do, reduce poll time */
-					sleep_time = MIN_SLEEP_TIME;
-					free(cmd);
-				}
+				process_cmd(cdev, buf, &mhvtl_cmd, sleep_time);
+				/* Something to do, reduce poll time */
+				sleep_time = MIN_SLEEP_TIME;
 				break;
 
 			case VTL_IDLE:
