@@ -18,6 +18,11 @@ struct s_info;
 #define OPERATOR   1
 #define ROBOT_ARM  0
 
+/* Capacity reported by READ BUFFER descriptor mode. The emulated buffer
+ * holds nothing, so this only has to be a value a host can work with.
+ */
+#define SMC_READ_BUFFER_SZ 65536
+
 struct smc_personality_template {
 	char	*name;
 	uint32_t library_has_map : 1;
@@ -46,7 +51,11 @@ uint8_t smc_initialize_element_status(struct scsi_cmd *cmd);
 uint8_t smc_initialize_element_status_with_range(struct scsi_cmd *cmd);
 uint8_t smc_log_sense(struct scsi_cmd *cmd);
 uint8_t smc_move_medium(struct scsi_cmd *cmd);
+uint8_t smc_position_to_element(struct scsi_cmd *cmd);
+uint8_t smc_read_buffer(struct scsi_cmd *cmd);
 uint8_t smc_read_element_status(struct scsi_cmd *cmd);
+uint8_t smc_request_volume_element_address(struct scsi_cmd *cmd);
+uint8_t smc_send_volume_tag(struct scsi_cmd *cmd);
 uint8_t smc_rezero(struct scsi_cmd *cmd);
 uint8_t smc_open_close_import_export_element(struct scsi_cmd *cmd);
 

@@ -111,9 +111,11 @@ struct device_type_template smc_template = {
 		SCSI_OP(0x1e, smc_allow_removal),
 
 		/* 0x20 -> 0x2f */
+		SCSI_OP(0x2b, smc_position_to_element),
 
 		/* 0x30 -> 0x3f */
 		SCSI_OP(0x37, smc_initialize_element_status_with_range),
+		SCSI_OP(0x3c, smc_read_buffer),
 
 		/* 0x40 -> 0x4f */
 		SCSI_OP(0x4c, spc_log_select),
@@ -135,6 +137,8 @@ struct device_type_template smc_template = {
 		SCSI_OP(0xa5, smc_move_medium),
 
 		/* 0xb0 -> 0xbf */
+		SCSI_OP(0xb5, smc_request_volume_element_address),
+		SCSI_OP(0xb6, smc_send_volume_tag),
 		SCSI_OP(0xb8, smc_read_element_status),
 
 		/* 0xc0 -> 0xcf */

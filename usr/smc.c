@@ -1593,6 +1593,351 @@ uint8_t smc_move_medium(struct scsi_cmd *cmd) {
 	return retval;
 }
 
+/*
+ * POSITION TO ELEMENT (2Bh) - SMC-2 6.8
+ *
+ * Places the transport element where a following MOVE MEDIUM between it
+ * and the destination needs no further motion. It moves no medium: there
+ * is no source address in the CDB and nothing to carry.
+ */
+uint8_t smc_position_to_element(struct scsi_cmd *cmd) {
+	uint8_t			*cdb	  = cmd->scb;
+	uint8_t			*sam_stat = &cmd->dbuf_p->sam_stat;
+	struct smc_priv *smc_p	  = cmd->lu->lu_private;
+	struct s_sd		 sd;
+	int				 transport_addr;
+	int				 dest_addr;
+
+	transport_addr = get_unaligned_be16(&cdb[2]);
+	dest_addr	   = get_unaligned_be16(&cdb[4]);
+
+	MHVTL_DBG(1, "POSITION TO ELEMENT (%ld) ** transport %d, destination %d",
+			  (long)cmd->dbuf_p->serialNo, transport_addr, dest_addr);
+
+	if (!cmd->lu->online) {
+		sam_not_ready(NO_ADDITIONAL_SENSE, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	if (cdb[8] & 0x01) { /* Can not invert media */
+		MHVTL_ERR("Can not invert media");
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 8;
+		sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	/* A transport address of zero selects the default picker */
+	if (transport_addr == 0)
+		transport_addr = smc_p->pm->start_picker;
+
+	if (slot_type(smc_p, transport_addr) != MEDIUM_TRANSPORT) {
+		MHVTL_ERR("Invalid medium transport address: %d", transport_addr);
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 2;
+		sam_illegal_request(E_INVALID_ELEMENT_ADDR, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	if (!valid_slot(smc_p, dest_addr)) {
+		MHVTL_ERR("Invalid destination address: %d", dest_addr);
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 4;
+		sam_illegal_request(E_INVALID_ELEMENT_ADDR, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	/* Nothing to emulate beyond validating the request: the transport
+	 * has no position that any other command can observe.
+	 */
+	return SAM_STAT_GOOD;
+}
+
+/*
+ * Match a stored volume identifier against a SEND VOLUME TAG template.
+ *
+ * SMC-2 6.12 defines exactly two wildcards: '?' matches one character
+ * and '*' matches any remaining string, after which the rest of the
+ * template is unused. Comparison ignores the blank padding both sides
+ * carry.
+ */
+static int svt_match(const char *tmpl, const char *barcode) {
+	int t = 0;
+	int b = 0;
+
+	while (tmpl[t] && tmpl[t] != ' ') {
+		if (tmpl[t] == '*')
+			return 1;
+		if (!barcode[b] || barcode[b] == ' ')
+			return 0;
+		if (tmpl[t] != '?' && tmpl[t] != barcode[b])
+			return 0;
+		t++;
+		b++;
+	}
+
+	/* Template exhausted: the barcode must be too */
+	return (!barcode[b] || barcode[b] == ' ');
+}
+
+/* True if the element satisfies the search left by SEND VOLUME TAG */
+static int svt_selected(struct smc_priv *smc_p, struct s_info *s) {
+	if (smc_p->svt_element_type && s->element_type != smc_p->svt_element_type)
+		return 0;
+	if (!(s->status & STATUS_Full) || !s->media)
+		return 0;
+
+	/* Codes 2h and 6h search alternate volume tags. mhvtl reports no
+	 * alternate tag on any element, so nothing can match.
+	 */
+	if (smc_p->svt_action_code == 0x02 || smc_p->svt_action_code == 0x06)
+		return 0;
+
+	return svt_match(smc_p->svt_template, s->media->barcode);
+}
+
+/*
+ * SEND VOLUME TAG (B6h) - SMC-2 6.12
+ *
+ * Only the translate (search) functions are implemented. Assert,
+ * replace and undefine are optional in SMC-2, and in mhvtl the barcode
+ * is the medium's identity - the data file is named for it - so letting
+ * an initiator rewrite it would detach the element from its media.
+ */
+uint8_t smc_send_volume_tag(struct scsi_cmd *cmd) {
+	uint8_t			*cdb	  = cmd->scb;
+	uint8_t			*buf	  = (uint8_t *)cmd->dbuf_p->data;
+	uint8_t			*sam_stat = &cmd->dbuf_p->sam_stat;
+	struct smc_priv *smc_p	  = cmd->lu->lu_private;
+	struct s_sd		 sd;
+	uint8_t			 type	   = cdb[1] & 0x0f;
+	uint8_t			 action	   = cdb[5] & 0x1f;
+	uint16_t		 param_len = get_unaligned_be16(&cdb[8]);
+	int				 count;
+	int				 i;
+
+	MHVTL_DBG(1, "SEND VOLUME TAG (%ld) ** type %d, action 0x%02x",
+			  (long)cmd->dbuf_p->serialNo, type, action);
+
+	if (!cmd->lu->online) {
+		sam_not_ready(NO_ADDITIONAL_SENSE, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	if (type > DATA_TRANSFER) {
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 1;
+		sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	/* Translate codes are 0h-2h and 4h-6h; 3h and 7h are reserved and
+	 * 8h upwards modify the stored tag.
+	 */
+	if (action > 0x06 || action == 0x03 || action == 0x07) {
+		MHVTL_DBG(1, "Send action code 0x%02x not supported", action);
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 5;
+		sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	if (param_len < SVT_TEMPLATE_LEN) {
+		sam_illegal_request(E_PARAMETER_LIST_LENGTH_ERR, NULL, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	cmd->dbuf_p->sz = param_len;
+	count			= retrieve_CDB_data(cmd->cdev, cmd->dbuf_p);
+	if (count < SVT_TEMPLATE_LEN) {
+		sam_illegal_request(E_PARAMETER_LIST_LENGTH_ERR, NULL, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	memcpy(smc_p->svt_template, buf, SVT_TEMPLATE_LEN);
+	smc_p->svt_template[SVT_TEMPLATE_LEN] = '\0';
+
+	/* Trim the blank padding so the match does not have to */
+	for (i = SVT_TEMPLATE_LEN - 1; i >= 0 && smc_p->svt_template[i] == ' '; i--)
+		smc_p->svt_template[i] = '\0';
+
+	smc_p->svt_action_code	= action;
+	smc_p->svt_element_type = type;
+	if (count >= 40) {
+		smc_p->svt_min_seq = get_unaligned_be16(&buf[34]);
+		smc_p->svt_max_seq = get_unaligned_be16(&buf[38]);
+	} else {
+		smc_p->svt_min_seq = 0;
+		smc_p->svt_max_seq = 0;
+	}
+
+	MHVTL_DBG(2, "Volume tag search template: \'%s\'", smc_p->svt_template);
+
+	return SAM_STAT_GOOD;
+}
+
+/*
+ * REQUEST VOLUME ELEMENT ADDRESS (B5h) - SMC-2 6.11
+ *
+ * Reports the elements matching the search left by the last SEND VOLUME
+ * TAG translate. The response is the READ ELEMENT STATUS layout with one
+ * changed header byte, so fill_ed() and the page header are reused.
+ */
+uint8_t smc_request_volume_element_address(struct scsi_cmd *cmd) {
+	uint8_t			 *cdb	   = cmd->scb;
+	uint8_t			 *sam_stat = &cmd->dbuf_p->sam_stat;
+	struct smc_priv	 *smc_p	   = cmd->lu->lu_private;
+	uint8_t			 *p;
+	struct s_info	 *sp;
+	struct s_sd		  sd;
+	uint16_t		  start	  = get_unaligned_be16(&cdb[2]);
+	uint16_t		  req_num = get_unaligned_be16(&cdb[4]);
+	uint32_t		  alloc_len;
+	uint32_t		  byte_count = 0;
+	uint16_t		  first		 = 0;
+	uint16_t		  reported	 = 0;
+	uint8_t			 *page_hdr	 = NULL;
+	uint8_t			  page_type	 = 0;
+	uint16_t		  page_count = 0;
+	uint32_t		  element_sz;
+
+	alloc_len = get_unaligned_be24(&cdb[7]);
+
+	MHVTL_DBG(1, "REQUEST VOLUME ELEMENT ADDRESS (%ld) **",
+			  (long)cmd->dbuf_p->serialNo);
+
+	if (!cmd->lu->online) {
+		sam_not_ready(NO_ADDITIONAL_SENSE, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	if (cdb[11] != 0) { /* CONTROL byte - NACA and linking unsupported */
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 11;
+		sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	p		  = (uint8_t *)cmd->dbuf_p->data;
+	alloc_len = min(alloc_len, smc_p->bufsize);
+	memset(p, 0, alloc_len);
+
+	/* Reserve the 8 byte volume element address header */
+	byte_count = 8;
+
+	list_for_each_entry(sp, &smc_p->slot_list, siblings) {
+		if (sp->slot_location < start)
+			continue;
+		/* As in READ ELEMENT STATUS, this is a maximum and zero means
+		 * report nothing.
+		 */
+		if (reported >= req_num)
+			break;
+		if (!svt_selected(smc_p, sp))
+			continue;
+
+		/* Elements are grouped into one page per element type. The
+		 * slot list is ordered by type, so a change of type closes
+		 * the current page.
+		 */
+		if (!page_hdr || sp->element_type != page_type) {
+			if (page_hdr)
+				fill_element_status_page_hdr(cmd, page_hdr,
+											 page_count, page_type);
+			page_hdr   = p + byte_count;
+			page_type  = sp->element_type;
+			page_count = 0;
+			byte_count += 8;
+		}
+
+		element_sz = fill_ed(cmd, p + byte_count, sp);
+		byte_count += element_sz;
+		page_count++;
+		if (!reported)
+			first = sp->slot_location;
+		reported++;
+	}
+
+	if (page_hdr)
+		fill_element_status_page_hdr(cmd, page_hdr, page_count, page_type);
+
+	/* Volume element address header, SMC-2 table 23. Same as the
+	 * element status data header except byte 4, which echoes the send
+	 * action code of the search being reported.
+	 */
+	put_unaligned_be16(first, &p[0]);
+	put_unaligned_be16(reported, &p[2]);
+	p[4] = smc_p->svt_action_code & 0x1f;
+	put_unaligned_be24(byte_count - 8, &p[5]);
+
+	cmd->dbuf_p->sz = min(byte_count, alloc_len);
+
+	MHVTL_DBG(2, "Reporting %d element%s, %d bytes",
+			  reported, (reported == 1) ? "" : "s", byte_count);
+
+	return SAM_STAT_GOOD;
+}
+
+/*
+ * READ BUFFER (3Ch) - SPC-5 6.18
+ *
+ * Descriptor and data mode against a single logical unit buffer. That is
+ * what the vendor references document for a changer, and it is enough
+ * for a host to probe the buffer before a WRITE BUFFER download.
+ */
+uint8_t smc_read_buffer(struct scsi_cmd *cmd) {
+	uint8_t	   *cdb		  = cmd->scb;
+	uint8_t	   *buf		  = (uint8_t *)cmd->dbuf_p->data;
+	uint8_t	   *sam_stat  = &cmd->dbuf_p->sam_stat;
+	struct s_sd sd;
+	uint8_t		mode	  = cdb[1] & 0x1f;
+	uint8_t		buffer_id = cdb[2];
+	uint32_t	offset	  = get_unaligned_be24(&cdb[3]);
+	uint32_t	alloc_len = get_unaligned_be24(&cdb[6]);
+	uint32_t	len;
+
+	MHVTL_DBG(1, "READ BUFFER (%ld) ** mode 0x%02x, buffer %d",
+			  (long)cmd->dbuf_p->serialNo, mode, buffer_id);
+
+	if (buffer_id != 0) { /* Only one buffer is defined */
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 2;
+		sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	switch (mode) {
+	case 0x02: /* Data */
+		if (offset >= SMC_READ_BUFFER_SZ) {
+			sd.byte0		 = SKSV | CD;
+			sd.field_pointer = 3;
+			sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+			return SAM_STAT_CHECK_CONDITION;
+		}
+		len = min(alloc_len, SMC_READ_BUFFER_SZ - offset);
+		memset(buf, 0, len);
+		cmd->dbuf_p->sz = len;
+		break;
+
+	case 0x03: /* Descriptor */
+		len = min(alloc_len, (uint32_t)4);
+		memset(buf, 0, 4);
+		buf[0] = 0; /* Offset boundary: no alignment restriction */
+		put_unaligned_be24(SMC_READ_BUFFER_SZ, &buf[1]);
+		cmd->dbuf_p->sz = len;
+		break;
+
+	default:
+		MHVTL_DBG(1, "READ BUFFER mode 0x%02x not supported", mode);
+		sd.byte0		 = SKSV | CD;
+		sd.field_pointer = 1;
+		sam_illegal_request(E_INVALID_FIELD_IN_CDB, &sd, sam_stat);
+		return SAM_STAT_CHECK_CONDITION;
+	}
+
+	return SAM_STAT_GOOD;
+}
+
 uint8_t smc_rezero(struct scsi_cmd *cmd) {
 	MHVTL_DBG(1, "REZERO (%ld) **", (long)cmd->dbuf_p->serialNo);
 

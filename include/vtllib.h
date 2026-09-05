@@ -129,6 +129,11 @@ typedef enum {
 /* Volume identification field qualifier values (SMC-2 table 2) */
 #define VOLTAG_VIQ_DETERMINED 0x00
 #define VOLTAG_VIQ_UNREADABLE 0x02
+/* Volume identification template in a SEND VOLUME TAG parameter list
+ * (SMC-2 table 26). Shorter than VOLTAG_LEN: the template carries no
+ * qualifier byte and no sequence number.
+ */
+#define SVT_TEMPLATE_LEN 32
 
 #define VPD_83_SZ 50
 #define VPD_86_SZ 0x3c
@@ -681,6 +686,15 @@ struct smc_priv {
 	char			 cap_closed;
 	char			*state_msg;	  /* Custom State message */
 	char			*movecommand; /* 3rd party command to call */
+
+	/* Search set up by the last SEND VOLUME TAG translate, reported by
+	 * REQUEST VOLUME ELEMENT ADDRESS (SMC-2 6.11, 6.12).
+	 */
+	uint8_t	 svt_action_code;
+	uint8_t	 svt_element_type;
+	uint16_t svt_min_seq;
+	uint16_t svt_max_seq;
+	char	 svt_template[SVT_TEMPLATE_LEN + 1];
 
 	struct smc_personality_template *pm;
 };
