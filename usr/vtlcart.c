@@ -182,6 +182,7 @@ static int tape_loaded(uint8_t *sam_stat) {
 	return 0;
 }
 
+/* Rewrite the meta_header structure and the filemark map. */
 static int rewrite_meta_file(void) {
 	ssize_t io_size, nwrite;
 	size_t	io_offset;
@@ -304,7 +305,11 @@ static int check_filemarks_alloc(uint32_t count) {
 	return 0;
 }
 
-static int add_filemark(uint32_t blk_number) {
+/* Record the filemark in the in-memory map only. The caller is responsible
+ * for persisting it with rewrite_meta_file(), so that writing N filemarks
+ * costs one meta file rewrite rather than N.
+ */
+static int add_filemark_locked(uint32_t blk_number) {
 	/* See if we have enough space remaining to add the new filemark.  If
 	   not, realloc now.
 	*/
@@ -314,9 +319,7 @@ static int add_filemark(uint32_t blk_number) {
 
 	filemarks[c_pos->partition_id][meta[c_pos->partition_id].filemark_count++] = blk_number;
 
-	/* Now rewrite the meta_header structure and the filemark map. */
-
-	return rewrite_meta_file();
+	return 0;
 }
 
 /*
@@ -1491,8 +1494,13 @@ int write_filemarks(uint32_t count, uint8_t *sam_stat) {
 					  strerror(errno));
 			return -1;
 		}
-		add_filemark(blk_number);
+		if (add_filemark_locked(blk_number))
+			return -1;
 	}
+
+	/* One rewrite of the meta file covers every filemark just added. */
+	if (rewrite_meta_file())
+		return -1;
 
 	/* Provide the force-flush guarantee. */
 

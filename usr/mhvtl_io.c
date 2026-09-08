@@ -579,11 +579,16 @@ static int writeBlock_nocomp(struct scsi_cmd *cmd, uint32_t src_sz, uint32_t src
  *
  * Zero on error with sense buffer already filled in
  */
+/* Reused for every compressed write - LZO1X_1_MEM_COMPRESS is fixed at
+ * compile time and the daemon is single threaded.
+ */
+static lzo_align_t lzo_wrkmem[((LZO1X_1_MEM_COMPRESS) + (sizeof(lzo_align_t) - 1)) /
+							  sizeof(lzo_align_t)];
+
 static int writeBlock_lzo(struct scsi_cmd *cmd, uint32_t src_sz, uint32_t src_offset, uint8_t null_wr, int lbp_method) {
 	lzo_uint  dest_len;
 	lzo_uint  src_len = src_sz;
 	lzo_bytep dest_buf;
-	lzo_bytep wrkmem = NULL;
 	uint32_t  crc;
 
 	lzo_bytep src_buf = (lzo_bytep)cmd->dbuf_p->data + src_offset;
@@ -601,26 +606,18 @@ static int writeBlock_lzo(struct scsi_cmd *cmd, uint32_t src_sz, uint32_t src_of
 
 	dest_len = mhvtl_compressBound(src_sz);
 	dest_buf = (lzo_bytep)malloc(dest_len);
-	wrkmem	 = (lzo_bytep)malloc(LZO1X_1_MEM_COMPRESS);
 
 	if (unlikely(!dest_buf)) {
 		MHVTL_ERR("dest_buf malloc(%d) failed", (int)dest_len);
 		sam_medium_error(E_WRITE_ERROR, sam_stat);
-		free(wrkmem);
 		return 0;
 	}
 
-	if (unlikely(!wrkmem)) {
-		MHVTL_ERR("wrkmem malloc(%d) failed", (int)LZO1X_1_MEM_COMPRESS);
-		sam_medium_error(E_WRITE_ERROR, sam_stat);
-		free(dest_buf);
-		return 0;
-	}
-
-	z = lzo1x_1_compress(src_buf, src_sz, dest_buf, &dest_len, wrkmem);
+	z = lzo1x_1_compress(src_buf, src_sz, dest_buf, &dest_len, lzo_wrkmem);
 	if (unlikely(z != LZO_E_OK)) {
 		MHVTL_ERR("LZO compression error");
 		sam_hardware_error(E_COMPRESSION_CHECK, sam_stat);
+		free(dest_buf);
 		return 0;
 	}
 
@@ -629,7 +626,6 @@ static int writeBlock_lzo(struct scsi_cmd *cmd, uint32_t src_sz, uint32_t src_of
 	rc = write_tape_block(dest_buf, src_len, dest_len, lu_priv->app_encr_info, LZO, null_wr, crc, sam_stat);
 
 	free(dest_buf);
-	free(wrkmem);
 	lu_priv->bytesWritten_M += dest_len;
 	lu_priv->bytesWritten_I += src_len;
 
