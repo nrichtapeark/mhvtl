@@ -385,18 +385,6 @@ const char *Check_DeviceCommand(const char *buf, int device_type) {
 }
 
 /* Open a new queue (for answers from server) */
-int CreateNewQueue(void) {
-	long queue_id;
-
-	/* Attempt to create a message queue */
-	queue_id = msgget(IPC_PRIVATE,
-					  IPC_CREAT | S_IRUSR | S_IWUSR | S_IWGRP | S_IWOTH);
-	if (queue_id == -1)
-		fprintf(stderr, "%s: %s\n", __func__, strerror(errno));
-
-	return queue_id;
-}
-
 /* Open an alreay opened queue (opened by server) */
 int OpenExistingQueue(key_t key) {
 	long queue_id;

@@ -26,6 +26,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <errno.h>
 #include "be_byteshift.h"
 #include "mhvtl_scsi.h"
 #include "vtl_common.h"
@@ -62,6 +63,23 @@ struct vpd *alloc_vpd(uint16_t sz) {
 void dealloc_vpd(struct vpd *pg) {
 	free(pg->data);
 	free(pg);
+}
+
+/* Allocate a VPD page and install it in the logical unit. Personality
+ * modules build their pages during start up, where there is nothing
+ * sensible to do about an allocation failure, so this keeps the
+ * abort-on-failure behaviour every call site had written out by hand.
+ */
+struct vpd *add_vpd_page(struct lu_phy_attr *lu, uint8_t pcode, uint16_t sz) {
+	int pg = PCODE_OFFSET(pcode);
+
+	lu->lu_vpd[pg] = alloc_vpd(sz);
+	if (!lu->lu_vpd[pg]) {
+		MHVTL_ERR("Failed to allocate %d bytes for VPD page 0x%02x",
+				  sz, pcode);
+		exit(-ENOMEM);
+	}
+	return lu->lu_vpd[pg];
 }
 
 uint8_t spc_inquiry(struct scsi_cmd *cmd) {
@@ -268,7 +286,7 @@ uint8_t resp_spc_pro(uint8_t *cdb, struct mhvtl_ds *dbuf_p) {
 		*sam_stat = SAM_STAT_RESERVATION_CONFLICT;
 		break;
 	case 3: /* CLEAR */
-		if (!SPR_Reservation_Key && !SPR_Reservation_Key) {
+		if (!SPR_Reservation_Key) {
 			*sam_stat = SAM_STAT_RESERVATION_CONFLICT;
 		} else {
 			if (RK == SPR_Reservation_Key) {
