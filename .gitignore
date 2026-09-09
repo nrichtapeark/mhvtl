@@ -24,4 +24,13 @@ tests/test_*
 # Vagrant specific files
 /vagrant/.vagrant
 /vagrant/*.log
-AGENTS.md
+
+# Debian package build artefacts
+/debian/.debhelper/
+/debian/files
+/debian/mhvtl/
+/debian/mhvtl-dkms/
+/debian/tmp/
+/debian/*.substvars
+/debian/*.debhelper
+/debian/debhelper-build-stamp

@@ -1,0 +1,8 @@
+# mhvtl.target groups the generated vtltape@ and vtllibrary@ instances so that
+# the whole virtual library starts and stops as a unit. The daemons are only
+# ever wanted by that target, never by multi-user.target directly.
+mhvtl: systemd-service-file-refers-to-unusual-wantedby-target mhvtl.target *
+
+# Upstream ships no manual page for these two helpers.
+mhvtl: no-manual-page [usr/bin/dump_messageQ]
+mhvtl: no-manual-page [usr/bin/mhvtl-device-conf-generator]

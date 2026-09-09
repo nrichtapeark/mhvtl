@@ -1,5 +1,0 @@
-mhvtl executes sg3-utils at runtime and therefore requires
-the sg3-utils package to be installed.
-
-The lsscsi package is recommended but not required; it is
-used for device inspection and diagnostics.

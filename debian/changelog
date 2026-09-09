@@ -1,7 +1,6 @@
-mhvtl (1.7.2-1ubuntu1) noble; urgency=medium
+mhvtl (1.8.0) resolute; urgency=medium
 
-  * Initial Debian/Ubuntu packaging.
-  * Adapt build for Ubuntu toolchain.
-  * Sync with upstream master.
+  * Initial Debian packaging, built from the source tree.
+  * Ship the kernel module as a DKMS source package.
 
- -- Maarten Jacobs <maarten256@outlook.com>  Tue, 07 Jan 2026 20:15:00 +0000
+ -- Matej Kenda <matejken@gmail.com>  Wed, 29 Jul 2026 10:00:00 +0200

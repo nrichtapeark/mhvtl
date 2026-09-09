@@ -1,8 +1,0 @@
-.debhelper/
-mhvtl*/
-source/
-tmp/
-debhelper-build-stamp
-*.log
-*.substvars
-*.debhelper

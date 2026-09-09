@@ -158,6 +158,7 @@ sed -i 's/^PACKAGE_VERSION=.*/PACKAGE_VERSION="%{dkms_version}"/' \
 %config(noreplace) %{_sysconfdir}/mhvtl/mhvtl.conf
 %config(noreplace) %{_sysconfdir}/mhvtl/device.conf
 %config(noreplace) %{_sysconfdir}/mhvtl/library_contents.10
+%config(noreplace) %{_sysconfdir}/mhvtl/library_contents.30
 %dir %{_usrsrc}/mhvtl-%{dkms_version}
 %{_usrsrc}/mhvtl-%{dkms_version}/*
 %{_systemdgeneratordir}/mhvtl-device-conf-generator
