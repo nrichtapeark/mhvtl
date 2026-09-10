@@ -56,7 +56,7 @@ uninstall: distclean
 	$(RUN_DEPMOD)
 
 ../mhvtl_kernel.tgz:  $(wildcard ./*.c) $(wildcard ./*.h) $(wildcard ../include/common/*.h) \
-					  config.sh Makefile
+					  config.sh dkms.conf Makefile
 	tar --sort=name --mtime=@1 --format=gnu --transform='s|.*/||' -czf $@ $^
 
 install-bkup:

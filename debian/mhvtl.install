@@ -1,0 +1,7 @@
+etc/mhvtl/*
+usr/bin/*
+usr/lib/*/mhvtl/libvtlscsi.so
+usr/lib/systemd/system/*
+usr/lib/systemd/system-generators/*
+usr/share/man/man1/*
+usr/share/man/man5/*

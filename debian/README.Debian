@@ -1,0 +1,49 @@
+mhvtl for Debian
+================
+
+Differences from the default build
+----------------------------------
+
+Media is stored in /var/lib/mhvtl rather than the /opt/mhvtl that config.mk
+defaults to. Debian Policy 9.1.1 reserves /opt for software the distribution
+does not ship.
+
+The kernel module is not built during the package build. mhvtl-dkms ships the
+source and DKMS builds it for the running kernel. Kernel headers matching that
+kernel must be installed, otherwise the build fails and no module is
+installed.
+
+Starting the service
+--------------------
+
+A systemd generator creates one daemon instance per entry in
+/etc/mhvtl/device.conf, so the units are templates and are not enabled
+individually. After editing the configuration:
+
+    systemctl start mhvtl.target
+
+If /var/lib/mhvtl is empty, run make_vtl_media(1) once to create the media.
+
+Why the daemons run as root
+---------------------------
+
+vtltape and vtllibrary create their own character device node with mknod() in
+chrdev_create(). The kernel module registers a dynamic character major but
+never calls device_create(), so no uevent is emitted and udev cannot create
+the node instead.
+
+CAP_MKNOD alone is not sufficient. mknod() also needs write permission on
+/dev, which is root-owned and mode 0755, so the call fails with EACCES before
+the capability is consulted. CAP_DAC_OVERRIDE lifts that restriction but
+grants root-equivalent file access.
+
+Running unprivileged is possible: mknod() on an existing path returns EEXIST,
+which chrdev_create() treats as success. It requires a privileged step to
+create and chown the nodes before the daemons start. That belongs in the
+shared systemd units rather than in the packaging, so it is not done here.
+
+The units drop the privileges that are not needed: NoNewPrivileges, a
+CapabilityBoundingSet of CAP_MKNOD, CAP_SYS_RESOURCE and CAP_DAC_OVERRIDE, and
+the ProtectSystem, ProtectHome, ProtectKernel* and Restrict* directives.
+PrivateDevices stays off because it would replace /dev with a private instance
+and hide the mhvtl nodes.

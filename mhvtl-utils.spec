@@ -11,6 +11,7 @@
 %define _unpackaged_files_terminate_build 0
 
 %define mhvtl_home_dir /opt/mhvtl
+%global dkms_version %{version}.%{minor}
 
 Summary: Virtual tape library. kernel pseudo HBA driver + userspace daemons
 %define real_name mhvtl
@@ -31,6 +32,7 @@ Recommends: lsscsi mtx mt-st
 Requires:sg3_utils
 Requires: policycoreutils
 Requires: tar >= 1.28
+Requires: dkms
 
 BuildRequires: systemd
 BuildRequires: systemd-rpm-macros
@@ -70,9 +72,19 @@ The SSC/SMC target daemons have been written from scratch.
 /bin/systemctl enable  mhvtl.target
 make_vtl_media --config-dir=%{_sysconfdir}/mhvtl --home-dir=/opt/mhvtl --mktape-path=%{_bindir}
 
+# DKMS registration (additive; do not fail install if DKMS isn't active)
+/usr/sbin/dkms add -m mhvtl -v %{dkms_version} || :
+/usr/sbin/dkms build -m mhvtl -v %{dkms_version} || :
+/usr/sbin/dkms install -m mhvtl -v %{dkms_version} || :
+
 %postun
 /sbin/ldconfig
 /bin/systemctl daemon-reload
+
+# Remove DKMS module on package erase
+if [ "$1" -eq 0 ]; then
+	/usr/sbin/dkms remove -m mhvtl -v %{dkms_version} --all || :
+fi
 
 #%{service_del_postun mhvtl.target mhvtl-load-modules.service vtllibrary@.service vtltape@.service}
 
@@ -100,6 +112,12 @@ make MHVTL_HOME_PATH=%{mhvtl_home_dir} VERSION=%{version} EXTRAVERSION=%{minor} 
 install -d -m 755 %{buildroot}%{_sbindir}
 ln -s %{_sbindir}/service %{buildroot}/%{_sbindir}/rc%{name}
 install -d -m 755 %{buildroot}/var/lib/%{name}
+
+# DKMS source tree (additive; does not replace existing install behavior)
+install -d -m 755 %{buildroot}%{_usrsrc}/mhvtl-%{dkms_version}
+tar -xf mhvtl_kernel.tgz -C %{buildroot}%{_usrsrc}/mhvtl-%{dkms_version}
+sed -i 's/^PACKAGE_VERSION=.*/PACKAGE_VERSION="%{dkms_version}"/' \
+	%{buildroot}%{_usrsrc}/mhvtl-%{dkms_version}/dkms.conf
 
 %clean
 %{__rm} -rf %{buildroot}
@@ -141,6 +159,8 @@ install -d -m 755 %{buildroot}/var/lib/%{name}
 %config(noreplace) %{_sysconfdir}/mhvtl/device.conf
 %config(noreplace) %{_sysconfdir}/mhvtl/library_contents.10
 %config(noreplace) %{_sysconfdir}/mhvtl/library_contents.30
+%dir %{_usrsrc}/mhvtl-%{dkms_version}
+%{_usrsrc}/mhvtl-%{dkms_version}/*
 %{_systemdgeneratordir}/mhvtl-device-conf-generator
 %{_unitdir}/mhvtl-load-modules.service
 %{_unitdir}/vtllibrary@.service
@@ -157,6 +177,12 @@ install -d -m 755 %{buildroot}/var/lib/%{name}
 %dir /opt/mhvtl/
 
 %changelog
+* Fri Jan 30 2026 Maarten Jacobs <maarten256@outlook.com> - 1.7-3
+- Added DKMS deployment so kernel module is built and kept in sync with kernel
+
+* Mon Mar 10 2025 Mark Harvey <markh794@gmail.com> - 1.7-2
+- Updated to release 1.7-2 (2025-03-10).
+
 * Fri Mar 10 2023 Mark Harvey <markh794@gmail.com> - 1.7-1
 - Updated to release 1.7-1 (2023-03-10).
 

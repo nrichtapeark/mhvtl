@@ -18,7 +18,19 @@ mhvtl_kernel.tgz
 /usr/mhvtl_kernel_mod_build
 tests/test_*
 !tests/test_*.c
+**/*.log
+**/*.swp
 
 # Vagrant specific files
 /vagrant/.vagrant
 /vagrant/*.log
+
+# Debian package build artefacts
+/debian/.debhelper/
+/debian/files
+/debian/mhvtl/
+/debian/mhvtl-dkms/
+/debian/tmp/
+/debian/*.substvars
+/debian/*.debhelper
+/debian/debhelper-build-stamp

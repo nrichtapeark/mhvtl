@@ -1,0 +1,51 @@
+Source: mhvtl
+Section: admin
+Priority: optional
+Maintainer: Matej Kenda <matejken@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-dkms,
+ zlib1g-dev
+Standards-Version: 4.7.2
+Homepage: https://github.com/markh794/mhvtl
+Vcs-Git: https://github.com/matejk/mhvtl.git
+Vcs-Browser: https://github.com/matejk/mhvtl
+Rules-Requires-Root: no
+
+Package: mhvtl
+Architecture: any
+Depends:
+ mhvtl-dkms (= ${binary:Version}),
+ sg3-utils,
+ ${misc:Depends},
+ ${shlibs:Depends}
+Recommends: lsscsi, mt-st, mtx
+Description: virtual tape library for Linux
+ mhvtl emulates a SCSI medium changer and SCSI tape drives entirely in
+ software. It consists of a pseudo HBA kernel module and a pair of
+ user-space daemons, vtllibrary and vtltape, which act as the SCSI
+ targets. Tape media is stored as regular files on disk.
+ .
+ It is used to test and develop backup and archival software without
+ physical tape hardware. It emulates LTO, DLT and AIT tape drives, and
+ tape libraries from vendors such as IBM, HP, Quantum and Spectra Logic.
+ .
+ This package provides the user-space daemons, command line tools and
+ systemd units. The kernel module is supplied by mhvtl-dkms.
+
+Package: mhvtl-dkms
+Section: kernel
+Architecture: all
+Depends:
+ dkms,
+ ${misc:Depends}
+Recommends: linux-headers-generic | linux-headers-amd64 | linux-headers
+Description: virtual tape library for Linux - kernel module source
+ mhvtl emulates a SCSI medium changer and SCSI tape drives entirely in
+ software, for testing backup and archival applications without physical
+ tape hardware.
+ .
+ This package provides the source of the mhvtl pseudo HBA kernel module.
+ DKMS builds it for the running kernel on installation and rebuilds it
+ whenever a new kernel is installed. Kernel headers matching the running
+ kernel must be present for the build to succeed.

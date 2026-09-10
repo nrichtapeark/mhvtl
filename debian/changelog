@@ -1,0 +1,6 @@
+mhvtl (1.8.0) resolute; urgency=medium
+
+  * Initial Debian packaging, built from the source tree.
+  * Ship the kernel module as a DKMS source package.
+
+ -- Matej Kenda <matejken@gmail.com>  Wed, 29 Jul 2026 10:00:00 +0200
