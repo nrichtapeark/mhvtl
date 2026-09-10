@@ -235,7 +235,8 @@ add_ibm_ultrium_5_drive()
 	SLOT=$7
 	VENDORID="IBM"
 	PRODUCTID="ULT3580-TD5"
-	PRODUCTREV="550V"
+	# LTFS refuses to open an LTO-5 drive reporting less than B170.
+	PRODUCTREV="B170"
 	DENSITY="50"
 
 	add_drive $ID $CH $TARGET $LUN $VENDORID $PRODUCTID $PRODUCTREV $UNITSERNO $LIB $SLOT $DENSITY
@@ -314,12 +315,13 @@ add_ibm_ultrium_8_drive()
 	VENDORID="IBM"
 	PRODUCTID="ULT3580-TD8"
 	#### According to IBM LTO SCSI reference: REV is built of
-	 # "ABCD" - so 2160 decodes as Year 2022 (2), Jan (1), Day (6th), Version '0'
+	 # "ABCD" - so HB81 decodes as Year 2017 (H), Nov (B), Day (8th), Version '1'
 	 # A = last digit char of year
 	 # B = Month, 1 - 9, A, B, C
 	 # C = Day, 1-9, A-V
 	 # D = Version
-	PRODUCTREV="2160"
+	 # LTFS refuses to open an LTO-8 drive reporting less than HB81.
+	PRODUCTREV="HB81"
 	DENSITY="50"
 
 	add_drive $ID $CH $TARGET $LUN $VENDORID $PRODUCTID $PRODUCTREV $UNITSERNO $LIB $SLOT $DENSITY
